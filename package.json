@@ -57,7 +57,8 @@
         "repo": "postit-clicker",
         "releaseType": "release"
       }
-    ]
+    ],
+    "npmRebuild": false
   },
   "repository": {
     "type": "git",
