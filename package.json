@@ -7,8 +7,8 @@
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win --x64 --publish never",
-    "release": "npm version patch && git push --follow-tags",
-    "release:minor": "npm version minor && git push --follow-tags"
+    "release": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor"
   },
   "dependencies": {
     "uiohook-napi": "^1.5.4",
