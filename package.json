@@ -1,6 +1,6 @@
 {
   "name": "postit-clicker",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "포스트잇 클리커 — 바탕화면 캐릭터 + 할 일 포스트잇",
   "main": "main.js",
   "author": "nabi",
@@ -11,9 +11,11 @@
     "release:minor": "node scripts/release.js minor"
   },
   "dependencies": {
-    "uiohook-napi": "^1.5.4",
+    "@supabase/supabase-js": "^2.118.0",
+    "electron-updater": "^6.3.9",
     "font-list": "^1.5.1",
-    "electron-updater": "^6.3.9"
+    "uiohook-napi": "^1.5.4",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -25,6 +27,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "sync.js",
       "src/**/*"
     ],
     "asarUnpack": [

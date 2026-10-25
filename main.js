@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { pathToFileURL, fileURLToPath } = require('url');
 const S = require('./src/shared.js');
+const Sync = require('./sync.js');
+let sync = null;
 
 let autoUpdater = null;
 try { ({ autoUpdater } = require('electron-updater')); } catch (e) { console.warn('[업데이트] electron-updater 없음'); }
@@ -38,7 +40,10 @@ function saveNow() {
 }
 function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 300); }
 function allWins() { return [...charWins.values(), listWin, boardWin, settingsWin].filter(w => w && !w.isDestroyed()); }
-function broadcast(except) { for (const w of allWins()) if (w.webContents !== except) w.webContents.send('data:changed', data); }
+function broadcast(except) {
+  if (sync) data.state.deleted = sync.deletedIds(); // 다른 기기에서 지운 것도 화면이 알 수 있게
+  for (const w of allWins()) if (w.webContents !== except) w.webContents.send('data:changed', data);
+}
 const charById = id => data.settings.characters.find(c => c.id === id);
 const idOfWin = win => { for (const [id, w] of charWins) if (w === win) return id; return null; };
 
@@ -212,6 +217,7 @@ function checkReminders() {
     const t = new Date(b.remindAt).getTime();
     if (isNaN(t) || t > nowT) continue;
     b.reminded = true; changed = true;
+    if (sync) sync.touchNote(n);
     if (nowT - t > 12 * 3600e3 || shown >= 3) continue; // 오래 꺼져 있었으면 한꺼번에 울리지 않음
     shown++;
     const label = S.dueLabel(b.due), text = (b.text || '').trim() || '할 일';
@@ -290,6 +296,7 @@ ipcMain.handle('data:get', () => data);
 ipcMain.on('data:set', (e, patch) => {
   if (!patch || typeof patch !== 'object') return;
   const before = S.countDone(data.state);
+  const oldState = data.state, oldSettings = JSON.parse(JSON.stringify(data.settings));
   if (patch.state) data.state = patch.state;
   if (patch.settings) {
     const oldS = data.settings;
@@ -299,6 +306,7 @@ ipcMain.on('data:set', (e, patch) => {
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!data.settings.autoLaunch });
   }
   data = S.normalize(data);
+  if (sync) sync.localChange(patch.state ? oldState : null, data.state, patch.settings ? oldSettings : null, patch.settings ? data.settings : null);
   save();
   broadcast(e.sender);
   if (patch.state && S.countDone(data.state) > before) for (const w of charWins.values()) w.webContents.send('char:done');
@@ -409,6 +417,13 @@ ipcMain.handle('hotkey:set', (_, accel) => {
   buildTray();
   return ok;
 });
+/* 동기화 */
+ipcMain.handle('sync:status', () => sync ? sync.status : { state: 'off' });
+ipcMain.handle('sync:signin', (_, { email, password }) => sync.signIn(email, password));
+ipcMain.handle('sync:signup', (_, { email, password }) => sync.signUp(email, password));
+ipcMain.handle('sync:signout', () => sync.signOut());
+ipcMain.handle('sync:now', async () => { await sync.pullAll(); await sync.pushNow(); return sync.status; });
+
 ipcMain.on('open:folder', (_, which) => shell.openPath(which === 'backup' ? BACKUP_DIR : ASSET_DIR));
 ipcMain.on('app:quit', () => app.quit());
 
@@ -421,6 +436,13 @@ app.whenReady().then(() => {
   // 0.1에서 쓰던 그림 폴더도 그대로 읽힘 (경로를 저장해 두었으므로)
   data = loadData();
   dailyBackup();
+  sync = new Sync({
+    dir: app.getPath('userData'),
+    getData: () => data,
+    onRemote: () => { data = S.normalize(data); save(); broadcast(null); },
+    onStatus: st => { if (settingsWin) settingsWin.webContents.send('sync:status', st); if (tray) tray.setToolTip('포스트잇 클리커' + (st.state === 'synced' ? ' (동기화됨)' : st.state === 'offline' ? ' (연결 안 됨)' : '')); },
+  });
+  sync.init().catch(e => console.warn('[동기화 시작 실패]', e.message));
   setInterval(dailyBackup, 3 * 3600e3); // 켜둔 채 날이 바뀌어도 백업
   applyTheme();
   data.settings.characters.forEach(c => lastSize.set(c.id, c.size));

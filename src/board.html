@@ -205,37 +205,59 @@ function touch(n){
 }
 function flushSoon(n){ touch(n); flush(); }
 
-/* 다른 창에서 바뀐 것 합치기 — 체크·마감·알림 표시와 새 할 일만 가져옴 (여기서 쓰던 글은 그대로) */
+/* 다른 창·다른 기기에서 바뀐 것 합치기
+   — 더 새로 고친 쪽(rev, updatedAt)을 따르고, 지금 글 쓰는 포스트잇은 건드리지 않음 */
 const META = ['done','doneAt','due','remindAt','remindOpt','reminded','imp'];
 function editing(){ const a = document.activeElement; return a && a !== document.body && a.closest('.note'); }
 function applyRemote(d){
   const prevSettings = JSON.stringify(settings);
   settings = d.settings;
-  if(JSON.stringify(settings) !== prevSettings) applySettings();
-  const rs = d.state, changed = new Set();
-  rs.boards.forEach(b => { if(!state.boards.find(x => x.id === b.id)) state.boards.push(b); });
+  if(JSON.stringify(settings) !== prevSettings){ applySettings(); }
+  const rs = d.state, del = new Set(rs.deleted || []);
+  const changed = new Set(), removed = new Set();
+  let boardsChanged = false;
+  const newer = (r, l) => (r.rev || 0) > (l.rev || 0) && (r.updatedAt || '') >= (l.updatedAt || '');
+
+  rs.boards.forEach(b => {
+    const l = state.boards.find(x => x.id === b.id);
+    if(!l){ state.boards.push(b); boardsChanged = true; }
+    else if((b.rev || 0) > (l.rev || 0) && bpopFor !== l){ Object.assign(l, b); boardsChanged = true; }
+  });
+  state.boards = state.boards.filter(b => { if(del.has(b.id) && !rs.boards.some(x => x.id === b.id)){ boardsChanged = true; return false; } return true; });
+  if(!state.boards.length) state.boards = rs.boards.slice();
+  if(!state.boards.find(b => b.id === state.current)){ state.current = [...state.boards].sort((a,b) => a.order - b.order)[0].id; boardsChanged = true; }
+
+  const focusId = editing() ? document.activeElement.closest('.note').dataset.id : null;
   const local = new Map(state.notes.map(n => [n.id, n]));
   rs.notes.forEach(rn => {
     const l = local.get(rn.id);
-    if(!l){ state.notes.push(rn); changed.add(rn.id); return; }
+    if(!l){ if(!del.has(rn.id)){ state.notes.push(rn); changed.add(rn.id); } return; }
+    const busy = rn.id === focusId || (popFor && popFor.n === l);
+    if(!busy && newer(rn, l)){
+      Object.keys(l).forEach(k => delete l[k]); Object.assign(l, rn); changed.add(l.id); return;
+    }
+    // 쓰는 중인 포스트잇: 체크·마감 같은 표시만 가져오고, 새 줄은 더함
     const lb = new Map(l.blocks.map(b => [b.id, b]));
     rn.blocks.forEach(rb => {
       const b = lb.get(rb.id);
-      if(!b){ l.blocks.push(rb); changed.add(l.id); return; }
-      META.forEach(k => { if(JSON.stringify(b[k]) !== JSON.stringify(rb[k])){ b[k] = rb[k]; changed.add(l.id); } });
+      if(!b){ if(newer(rn, l)){ l.blocks.push(rb); changed.add(l.id); } return; }
+      META.forEach(k => { if(JSON.stringify(b[k]) !== JSON.stringify(rb[k]) && (rn.rev || 0) > (l.rev || 0)){ b[k] = rb[k]; changed.add(l.id); } });
     });
   });
-  if(!changed.size) return;
+  state.notes = state.notes.filter(n => { if(del.has(n.id) && !rs.notes.some(x => x.id === n.id)){ removed.add(n.id); return false; } return true; });
+
+  if(!changed.size && !removed.size && !boardsChanged) return;
   maxZ = state.notes.reduce((m,n) => Math.max(m, n.z || 0), 0);
   if(saveTimer) save();
-  if(!editing() && !popFor){ render(); return; }
-  const focusNote = document.activeElement && document.activeElement.closest('.note');
+  if(boardsChanged && !bpopFor && !focusId){ render(); return; }
+  if(!focusId && !popFor){ renderBoard(); renderTabs(); return; }
+  removed.forEach(id => { const el = document.querySelector(`.note[data-id="${id}"]`); if(el) el.remove(); });
   changed.forEach(id => {
     const n = state.notes.find(x => x.id === id); if(!n || n.boardId !== state.current) return;
-    if(focusNote && focusNote.dataset.id === id) return;
+    if(id === focusId) return;
     if(noteNode(n)) rerender(n); else $('#board').append(noteEl(n));
   });
-  renderTabs();
+  if(!bpopFor) renderTabs();
 }
 function applySettings(){
   document.documentElement.style.setProperty('--nf', `"${settings.noteFont || 'Gaegu'}"`);

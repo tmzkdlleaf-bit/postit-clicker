@@ -83,6 +83,7 @@ h3{font-size:var(--fs-m);font-weight:700;margin:28px 0 10px}
   <button data-s="char" class="on">캐릭터</button>
   <button data-s="note">포스트잇</button>
   <button data-s="prio">우선도</button>
+  <button data-s="sync">동기화</button>
   <button data-s="general">일반</button>
   <div class="grow"></div>
   <button id="quit">종료</button>
@@ -163,6 +164,22 @@ h3{font-size:var(--fs-m);font-weight:700;margin:28px 0 10px}
       <div><label>중요도 올리기</label><textarea class="field" id="kwHigh"></textarea></div>
       <div><label>중요도 내리기</label><textarea class="field" id="kwLow"></textarea></div>
     </div>
+  </section>
+
+  <!-- 동기화 -->
+  <section id="s-sync">
+    <h2>동기화</h2>
+    <div id="syncOut">
+      <div class="row"><span class="k">이메일</span><input class="field" id="sEmail" type="email" autocomplete="username"></div>
+      <div class="row"><span class="k">비밀번호</span><input class="field" id="sPw" type="password" autocomplete="current-password"></div>
+      <div class="row"><span class="k"></span><button class="btn primary" id="sIn">로그인</button><button class="btn" id="sUp">가입</button></div>
+    </div>
+    <div id="syncIn" hidden>
+      <div class="row"><span class="k">계정</span><span id="sWho"></span></div>
+      <div class="row"><span class="k">상태</span><span id="sState"></span></div>
+      <div class="row"><span class="k"></span><button class="btn" id="sNow">지금 동기화</button><button class="btn ghost danger" id="sOut">로그아웃</button></div>
+    </div>
+    <div class="row"><span class="k"></span><span class="note" id="sMsg" style="margin:0"></span></div>
   </section>
 
   <!-- 일반 -->
@@ -410,6 +427,36 @@ function render() {
   showHotkey();
   check('autoLaunch', S, 'autoLaunch');
 }
+/* ---------- 동기화 ---------- */
+const SYNC_STATE = { off: '꺼짐', syncing: '맞추는 중', synced: '최신', offline: '연결 안 됨' };
+function showSync(st) {
+  const on = st && st.state !== 'off' && st.email;
+  $('#syncOut').hidden = !!on; $('#syncIn').hidden = !on;
+  if (on) {
+    $('#sWho').textContent = st.email;
+    let t = SYNC_STATE[st.state] || st.state;
+    if (st.state === 'synced' && st.last) t += ` ${new Date(st.last).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+    $('#sState').textContent = t;
+    $('#sMsg').textContent = st.state === 'offline' ? (st.error || '') : '';
+  }
+}
+async function syncAct(fn) {
+  const email = $('#sEmail').value.trim(), pw = $('#sPw').value;
+  if (!email || !pw) { $('#sMsg').textContent = '이메일과 비밀번호를 적어주세요.'; return; }
+  $('#sMsg').style.color = ''; $('#sMsg').textContent = '';
+  $('#sIn').disabled = $('#sUp').disabled = true;
+  const r = await fn(email, pw);
+  $('#sIn').disabled = $('#sUp').disabled = false;
+  if (r.error) $('#sMsg').textContent = r.error;
+  else if (r.confirm) { $('#sMsg').style.color = 'var(--muted)'; $('#sMsg').textContent = '확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.'; }
+  else { $('#sPw').value = ''; showSync(await api.syncStatus()); }
+}
+$('#sIn').onclick = () => window.api && syncAct(api.syncSignIn);
+$('#sUp').onclick = () => window.api && syncAct(api.syncSignUp);
+$('#sPw').addEventListener('keydown', e => { if (e.key === 'Enter' && window.api) syncAct(api.syncSignIn); });
+$('#sNow').onclick = async () => { if (window.api) showSync(await api.syncNow()); };
+$('#sOut').onclick = async () => { if (window.api && confirm('로그아웃할까요? 이 컴퓨터의 할 일은 그대로 남아요.')) { await api.syncSignOut(); showSync(await api.syncStatus()); } };
+
 /* ---------- 업데이트 ---------- */
 const UPD_MSG = { checking: '확인하는 중', none: '최신 버전이에요', available: v => `${v} 받을 수 있어요`, downloading: (v, p) => `받는 중 ${p}%`,
   ready: v => `${v} 설치 준비 끝`, error: '확인하지 못했어요', dev: '설치한 프로그램에서만 확인돼요', idle: '' };
@@ -441,6 +488,7 @@ $('#quit').onclick = () => { if (confirm('프로그램을 종료할까요?')) wi
   document.addEventListener('focusout', () => setTimeout(() => { if (pending && !typing()) applyRemote(pending); }, 50));
   if (window.api) {
     api.updateStatus().then(showUpd); api.onUpdate(showUpd);
+    api.syncStatus().then(showSync); api.onSyncStatus(showSync);
     api.onSettingsGo(go);
     api.fonts().then(f => { systemFonts = f.filter(x => !WEB_FONTS.includes(x)); renderNoteFont(); fontOptions($('#bFont'), C.bubble.font, true); });
   }

@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld('api', {
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   onUpdate: (cb) => on('update:status', cb),
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
+  syncSignIn: (email, password) => ipcRenderer.invoke('sync:signin', { email, password }),
+  syncSignUp: (email, password) => ipcRenderer.invoke('sync:signup', { email, password }),
+  syncSignOut: () => ipcRenderer.invoke('sync:signout'),
+  syncNow: () => ipcRenderer.invoke('sync:now'),
+  onSyncStatus: (cb) => on('sync:status', cb),
   openFolder: (which) => ipcRenderer.send('open:folder', which),
   quit: () => ipcRenderer.send('app:quit'),
 });
