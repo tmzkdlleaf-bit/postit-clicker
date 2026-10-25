@@ -172,7 +172,7 @@ h3{font-size:var(--fs-m);font-weight:700;margin:28px 0 10px}
     <div class="row"><span class="k">목록 단축키</span><input class="field hk" id="hotkey" readonly><button class="btn ghost" id="hkClear">지우기</button><span class="note" id="hkErr"></span></div>
     <div class="row"><span class="k">자동 실행</span><label class="chk"><input type="checkbox" id="autoLaunch">컴퓨터 켤 때 실행</label></div>
     <div class="row"><span class="k">버전</span><span id="ver"></span><button class="btn" id="updBtn">업데이트 확인</button><span id="updMsg" style="color:var(--muted)"></span></div>
-    <div class="row"><span class="k">파일</span><button class="btn" id="folder">그림과 소리 폴더 열기</button></div>
+    <div class="row"><span class="k">폴더 열기</span><button class="btn" id="folder">그림과 소리</button><button class="btn" id="backupFolder">자동 백업</button></div>
   </section>
 </main>
 <script src="shared.js"></script>
@@ -421,6 +421,7 @@ function showUpd(u) {
 $('#updBtn').onclick = async () => { if (window.api) showUpd(await api.checkUpdate()); };
 
 $('#folder').onclick = () => window.api && api.openFolder();
+$('#backupFolder').onclick = () => window.api && api.openFolder('backup');
 $('#quit').onclick = () => { if (confirm('프로그램을 종료할까요?')) window.api && api.quit(); };
 
 (async () => {

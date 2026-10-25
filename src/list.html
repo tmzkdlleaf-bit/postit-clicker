@@ -8,7 +8,7 @@
 <style>
 html,body{height:100%;background:transparent;overflow:hidden}
 body{padding:10px}
-.card{height:100%;display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-l);box-shadow:var(--shadow-pop);overflow:hidden}
+.card{position:relative;height:100%;display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-l);box-shadow:var(--shadow-pop);overflow:hidden}
 
 .top{display:flex;align-items:center;gap:4px;padding:10px 10px 6px 16px;-webkit-app-region:drag}
 .top h1{margin:0;font-size:var(--fs-l);font-weight:700;flex:1}
@@ -17,22 +17,38 @@ body{padding:10px}
 
 .add{padding:4px 12px 10px}
 .add .field{width:100%;height:34px;padding:0 10px}
-.more{display:none;gap:6px;margin-top:6px}
+.more{display:none;gap:6px;margin-top:6px;align-items:center}
 .add.open .more{display:flex}
 .more select{flex:1}
-.more input[type=date]{width:130px}
+.more input[type=date]{width:128px;flex:none}
+.more .time{font-size:var(--fs-s);color:var(--a11);font-weight:600;flex:none}
 
 .list{flex:1;overflow-y:auto;border-top:var(--hair) solid var(--line-soft)}
 .item{display:flex;gap:10px;align-items:flex-start;padding:10px 16px;border-bottom:var(--hair) solid var(--line-soft)}
 .item input{width:16px;height:16px;margin:2px 0 0;flex:none;cursor:pointer}
-.item .txt{flex:1;min-width:0}
-.item .t{line-height:1.4;word-break:break-all;cursor:default}
+.item .txt{flex:1;min-width:0;cursor:pointer}
+.item .t{line-height:1.4;word-break:break-all}
+.item .txt:hover .t{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .item.gone{opacity:0;transition:opacity var(--dur) var(--ease)}
 .meta{display:flex;gap:10px;margin-top:2px;font-size:var(--fs-s);color:var(--muted)}
 .meta .over{color:var(--danger);font-weight:600}
 .meta .soon{color:var(--a11);font-weight:600}
 .item.hi .t{font-weight:600}
-.empty{padding:48px 16px;text-align:center;color:var(--faint)}
+.item.done .t{text-decoration:line-through;color:var(--faint)}
+.empty{padding:40px 16px;text-align:center;color:var(--faint)}
+
+.doneHead{display:flex;align-items:center;gap:6px;width:100%;height:38px;padding:0 16px;border:0;background:none;color:var(--muted);cursor:pointer;text-align:left}
+.doneHead:hover{color:var(--text)}
+.doneHead i{font-style:normal;display:inline-block;transition:rotate var(--dur) var(--ease)}
+.doneHead.open i{rotate:90deg}
+
+.toast{position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;height:40px;
+  border-radius:var(--r-m);background:var(--s12);color:var(--s1);opacity:0;translate:0 8px;pointer-events:none;
+  transition:opacity var(--dur) var(--ease),translate var(--dur) var(--ease)}
+.toast.show{opacity:1;translate:0 0;pointer-events:auto}
+.toast span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast button{height:30px;padding:0 10px;border:0;border-radius:var(--r-s);background:none;color:var(--a9);font-weight:600;cursor:pointer}
+.toast button:hover{background:rgb(255 255 255 / .08)}
 </style>
 </head>
 <body>
@@ -47,15 +63,44 @@ body{padding:10px}
     <div class="more">
       <select class="field" id="newBoard" aria-label="판"></select>
       <input class="field" type="date" id="newDue" aria-label="마감">
+      <span class="time" id="newTime"></span>
       <button class="btn primary" id="addBtn">추가</button>
     </div>
   </div>
   <div class="list" id="list"></div>
+  <div class="toast" id="toast"><span id="toastText"></span><button id="undo">되돌리기</button></div>
 </div>
 <script src="shared.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-let data = null;
+let data = null, doneOpen = false;
+const save = () => Shared.Store.save({ state: data.state });
+const goTo = it => window.api && api.open('board', { noteId: it.noteId, blockId: it.id });
+
+function metaEl(it) {
+  const meta = document.createElement('div'); meta.className = 'meta';
+  if (it.due) {
+    const d = document.createElement('span'); d.textContent = Shared.dueLabel(it.due);
+    if (it.days < 0) d.className = 'over'; else if (it.days <= 1) d.className = 'soon';
+    meta.append(d);
+  }
+  const bn = document.createElement('span'); bn.textContent = it.boardName; meta.append(bn);
+  return meta;
+}
+function row(it, done) {
+  const r = document.createElement('div'); r.className = 'item' + (done ? ' done' : (it.weight >= 3.5 ? ' hi' : ''));
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = done; cb.setAttribute('aria-label', '완료');
+  cb.onchange = () => {
+    if (!done) { r.classList.add('gone'); Shared.setDone(data.state, it.id, true); save(); toast(it); setTimeout(render, 250); }
+    else { Shared.setDone(data.state, it.id, false); save(); render(); }
+  };
+  const txt = document.createElement('div'); txt.className = 'txt'; txt.title = '판에서 보기';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = it.text;
+  txt.append(t); if (!done) txt.append(metaEl(it));
+  txt.onclick = () => goTo(it);
+  r.append(cb, txt);
+  return r;
+}
 
 function render() {
   const items = Shared.collect(data.state, data.settings);
@@ -68,40 +113,56 @@ function render() {
   sel.value = data.state.boards.some(b => b.id === keep) ? keep : data.state.current;
 
   const list = $('#list'); list.innerHTML = '';
-  if (!items.length) { list.innerHTML = '<div class="empty">할 일이 없어요</div>'; return; }
-  items.forEach(it => {
-    const row = document.createElement('div'); row.className = 'item' + (it.weight >= 3.5 ? ' hi' : '');
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('aria-label', '완료');
-    cb.onchange = () => {
-      row.classList.add('gone');
-      Shared.setDone(data.state, it.id, true);
-      Shared.Store.save({ state: data.state });
-      setTimeout(render, 250);
-    };
-    const txt = document.createElement('div'); txt.className = 'txt';
-    const t = document.createElement('div'); t.className = 't'; t.textContent = it.text;
-    const meta = document.createElement('div'); meta.className = 'meta';
-    if (it.due) {
-      const d = document.createElement('span'); d.textContent = Shared.dueLabel(it.due);
-      if (it.days < 0) d.className = 'over'; else if (it.days <= 1) d.className = 'soon';
-      meta.append(d);
-    }
-    const bn = document.createElement('span'); bn.textContent = it.boardName; meta.append(bn);
-    txt.append(t, meta);
-    row.append(cb, txt);
-    list.append(row);
-  });
+  if (!items.length) list.innerHTML = '<div class="empty">할 일이 없어요</div>';
+  items.forEach(it => list.append(row(it, false)));
+
+  const done = Shared.doneToday(data.state);
+  if (done.length) {
+    const h = document.createElement('button'); h.className = 'doneHead' + (doneOpen ? ' open' : '');
+    h.innerHTML = '<i>›</i>'; h.append(document.createTextNode(`오늘 끝낸 일 ${done.length}`));
+    h.onclick = () => { doneOpen = !doneOpen; render(); };
+    list.append(h);
+    if (doneOpen) done.forEach(it => list.append(row(it, true)));
+  }
 }
 
+/* 되돌리기 */
+let toastT, lastDone = null;
+function toast(it) {
+  lastDone = it;
+  $('#toastText').textContent = `「${it.text}」 완료`;
+  $('#toast').classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => $('#toast').classList.remove('show'), 5000);
+}
+$('#undo').onclick = () => {
+  if (!lastDone) return;
+  Shared.setDone(data.state, lastDone.id, false); save(); lastDone = null;
+  $('#toast').classList.remove('show'); render();
+};
+
+/* 추가: 글 안의 날짜는 알아서 마감으로 */
+let manualDate = false, parsed = { text: '', due: null };
+function onType() {
+  const v = $('#newText').value;
+  $('#add').classList.toggle('open', !!v.trim());
+  if (manualDate) return;
+  parsed = Shared.parseQuick(v);
+  $('#newDue').value = parsed.due ? parsed.due.slice(0, 10) : '';
+  $('#newTime').textContent = parsed.due && parsed.due.length > 10 ? parsed.due.slice(11) : '';
+}
 function addItem() {
-  const text = $('#newText').value.trim(); if (!text) return;
-  Shared.addQuickItem(data.state, $('#newBoard').value, text, $('#newDue').value || null, data.settings.notePalette);
-  Shared.Store.save({ state: data.state });
-  $('#newText').value = ''; $('#newDue').value = '';
+  const raw = $('#newText').value.trim(); if (!raw) return;
+  let text = raw, due = $('#newDue').value || null;
+  if (!manualDate && parsed.due) { text = parsed.text; due = parsed.due; }
+  Shared.addQuickItem(data.state, $('#newBoard').value, text, due, data.settings.notePalette);
+  save();
+  $('#newText').value = ''; $('#newDue').value = ''; $('#newTime').textContent = '';
+  manualDate = false; parsed = { text: '', due: null };
+  $('#add').classList.remove('open');
   render(); $('#newText').focus();
 }
-const add = $('#add');
-$('#newText').addEventListener('input', () => add.classList.toggle('open', !!$('#newText').value));
+$('#newText').addEventListener('input', onType);
+$('#newDue').addEventListener('input', () => { manualDate = true; $('#newTime').textContent = ''; });
 $('#newText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addItem(); } });
 $('#addBtn').onclick = addItem;
 $('#close').onclick = () => window.api && api.hideList();

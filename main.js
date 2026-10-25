@@ -16,7 +16,7 @@ app.setAppUserModelId('com.nabi.postit-clicker');
 const SRC = path.join(__dirname, 'src');
 const ICON = path.join(SRC, 'icon.png');
 const PRELOAD = path.join(__dirname, 'preload.js');
-let DATA_FILE, ASSET_DIR;
+let DATA_FILE, ASSET_DIR, BACKUP_DIR;
 let data;
 const charWins = new Map(); // 캐릭터 id → 창
 let listWin = null, boardWin = null, settingsWin = null, tray = null;
@@ -101,9 +101,9 @@ function createListWin() {
   listWin.on('blur', () => { if (listWin && !listWin.webContents.isDevToolsOpened()) listWin.hide(); });
   listWin.on('closed', () => { listWin = null; });
 }
-function showList(fromWin) {
+function showList(fromWin, toggle) {
   if (!listWin) createListWin();
-  if (listWin.isVisible() && !fromWin) { listWin.hide(); return; } // 단축키로 열고 닫기
+  if (toggle && listWin.isVisible()) { listWin.hide(); return; } // 단축키·트레이: 한 번 더 누르면 닫기
   const [lw, lh] = listWin.getSize();
   const cw = fromWin && !fromWin.isDestroyed() ? fromWin : null;
   let anchor;
@@ -120,9 +120,10 @@ function showList(fromWin) {
 }
 
 /* ---------- 판 / 설정 창 ---------- */
-function openBoard() {
+function openBoard(focus) {
   if (listWin && listWin.isVisible()) listWin.hide();
-  if (boardWin) { if (boardWin.isMinimized()) boardWin.restore(); boardWin.show(); boardWin.focus(); return; }
+  const sendFocus = () => { if (focus && boardWin) boardWin.webContents.send('board:focus', focus); };
+  if (boardWin) { if (boardWin.isMinimized()) boardWin.restore(); boardWin.show(); boardWin.focus(); sendFocus(); return; }
   const b = data.settings.boardBounds;
   boardWin = new BrowserWindow({
     width: (b && b.width) || 1200, height: (b && b.height) || 800, x: b && b.x, y: b && b.y,
@@ -130,7 +131,9 @@ function openBoard() {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#191918' : '#f9f9f8',
     webPreferences: { preload: PRELOAD, contextIsolation: true, nodeIntegration: false },
   });
+  boardWin.setMenu(null); // 판 안에서 Ctrl+휠·Ctrl+=를 확대·축소로 쓰려고 기본 메뉴 단축키를 뺌
   boardWin.loadFile(path.join(SRC, 'board.html'));
+  boardWin.webContents.once('did-finish-load', () => setTimeout(sendFocus, 300));
   boardWin.on('close', () => { data.settings.boardBounds = boardWin.getBounds(); save(); });
   boardWin.on('closed', () => { boardWin = null; });
 }
@@ -151,7 +154,7 @@ function buildTray() {
   if (!tray) {
     tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
     tray.setToolTip('포스트잇 클리커');
-    tray.on('click', () => showList(firstChar()));
+    tray.on('click', () => showList(firstChar(), true));
   }
   const chars = data.settings.characters.map(c => ({
     label: c.name, type: 'checkbox', checked: c.visible !== false,
@@ -164,7 +167,7 @@ function buildTray() {
   if (updItems.length) updItems.push({ type: 'separator' });
   tray.setContextMenu(Menu.buildFromTemplate([
     ...updItems,
-    { label: '할 일 목록', accelerator: hotkeyNow || undefined, click: () => showList(firstChar()) },
+    { label: '할 일 목록', accelerator: hotkeyNow || undefined, click: () => showList(firstChar(), true) },
     { label: '포스트잇 판', click: openBoard },
     { type: 'separator' },
     ...chars,
@@ -183,7 +186,7 @@ function applyHotkey(accel) {
   if (hotkeyNow) { try { globalShortcut.unregister(hotkeyNow); } catch (_) {} hotkeyNow = ''; }
   if (!accel) return true;
   let ok = false;
-  try { ok = globalShortcut.register(accel, () => showList(firstChar())); } catch (_) { ok = false; }
+  try { ok = globalShortcut.register(accel, () => showList(firstChar(), true)); } catch (_) { ok = false; }
   if (ok) hotkeyNow = accel;
   return ok;
 }
@@ -214,7 +217,7 @@ function checkReminders() {
     const label = S.dueLabel(b.due), text = (b.text || '').trim() || '할 일';
     if (Notification.isSupported()) {
       const nt = new Notification({ title: text, body: label || '알림', icon: ICON });
-      nt.on('click', () => showList(firstChar()));
+      nt.on('click', () => openBoard({ noteId: n.id, blockId: b.id }));
       nt.show();
     }
     const w = firstChar();
@@ -269,6 +272,19 @@ function setupUpdater() {
 ipcMain.handle('update:check', () => { checkUpdate(true); return updStatus(); });
 ipcMain.handle('update:status', () => updStatus());
 
+/* ---------- 날마다 자동 백업 (14일치) ---------- */
+function dailyBackup() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return;
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const t = new Date(), key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    const dest = path.join(BACKUP_DIR, `postit-data-${key}.json`);
+    if (!fs.existsSync(dest)) fs.copyFileSync(DATA_FILE, dest);
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => /^postit-data-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    files.slice(0, Math.max(0, files.length - 14)).forEach(f => fs.unlinkSync(path.join(BACKUP_DIR, f)));
+  } catch (e) { console.warn('[백업 실패]', e); }
+}
+
 /* ---------- 데이터 주고받기 ---------- */
 ipcMain.handle('data:get', () => data);
 ipcMain.on('data:set', (e, patch) => {
@@ -293,7 +309,7 @@ ipcMain.on('data:set', (e, patch) => {
 });
 
 ipcMain.on('win:open', (e, name, arg) => {
-  if (name === 'board') openBoard();
+  if (name === 'board') openBoard(arg);
   else if (name === 'list') showList(BrowserWindow.fromWebContents(e.sender));
   else if (name === 'settings') openSettings(arg);
 });
@@ -393,16 +409,19 @@ ipcMain.handle('hotkey:set', (_, accel) => {
   buildTray();
   return ok;
 });
-ipcMain.on('open:folder', () => shell.openPath(ASSET_DIR));
+ipcMain.on('open:folder', (_, which) => shell.openPath(which === 'backup' ? BACKUP_DIR : ASSET_DIR));
 ipcMain.on('app:quit', () => app.quit());
 
 /* ---------- 시작 / 끝 ---------- */
 app.whenReady().then(() => {
   DATA_FILE = path.join(app.getPath('userData'), 'postit-data.json');
   ASSET_DIR = path.join(app.getPath('userData'), 'assets');
+  BACKUP_DIR = path.join(app.getPath('userData'), 'backups');
   fs.mkdirSync(ASSET_DIR, { recursive: true });
   // 0.1에서 쓰던 그림 폴더도 그대로 읽힘 (경로를 저장해 두었으므로)
   data = loadData();
+  dailyBackup();
+  setInterval(dailyBackup, 3 * 3600e3); // 켜둔 채 날이 바뀌어도 백업
   applyTheme();
   data.settings.characters.forEach(c => lastSize.set(c.id, c.size));
   syncCharWins();

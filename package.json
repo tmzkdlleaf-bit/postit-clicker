@@ -1,6 +1,6 @@
 {
   "name": "postit-clicker",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "포스트잇 클리커 — 바탕화면 캐릭터 + 할 일 포스트잇",
   "main": "main.js",
   "author": "nabi",

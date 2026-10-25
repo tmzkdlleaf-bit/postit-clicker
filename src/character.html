@@ -211,6 +211,18 @@ function resetIdle() {
   if (!C || !(C.idleMin > 0)) return;
   idleT = setTimeout(() => { say(pick('idle')); hop(); resetIdle(); }, C.idleMin * 60000);
 }
+/* 처음 설치했을 때 한 번만: 쓰는 법 알려주기 */
+function firstHint() {
+  if (data.settings.characters[0].id !== ID) return false;
+  let seen = null; try { seen = localStorage.getItem('postit.hint'); } catch (_) {}
+  if (seen) return false;
+  try { localStorage.setItem('postit.hint', '1'); localStorage.setItem('postit.morning.' + ID, Shared.todayKey()); } catch (_) {}
+  setTimeout(() => { hop(); say('안녕! 나를 눌러봐.', false, 3500); }, 1200);
+  setTimeout(() => say('우클릭하면 할 일 목록이 나와.', false, 4000), 5000);
+  setTimeout(() => say('두 번 누르면 포스트잇 판이야.', false, 4000), 9300);
+  return true;
+}
+
 /* 하루 첫 실행 인사 */
 function morning() {
   if (!C.morning) return;
@@ -278,7 +290,7 @@ if (window.api) {
 
 (async () => {
   apply(window.api ? Shared.normalize(await api.get()) : Shared.defaultData());
-  morning();
+  if (!firstHint()) morning();
 })();
 </script>
 </body>

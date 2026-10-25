@@ -237,6 +237,68 @@
     return String(line || '').replace(/\{(할일|마감|판|개수)\}/g, (_, k) => vars[k] != null ? vars[k] : '');
   }
 
+  /* ---------- 할 일 글에서 날짜 알아내기 ----------
+     「과제 내일까지」「금요일 3시 회의」「10/30 마감」「3일 후」처럼 적으면 마감으로 */
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  function parseQuick(input, ref) {
+    let text = ' ' + String(input || '') + ' ';
+    const t0 = ref ? new Date(ref) : new Date(); t0.setHours(0, 0, 0, 0);
+    const add = n => { const d = new Date(t0); d.setDate(d.getDate() + n); return d; };
+    const md = (m, d) => { const x = new Date(t0.getFullYear(), m - 1, d); if (x.getMonth() !== m - 1) return null; if (x < t0) x.setFullYear(x.getFullYear() + 1); return x; };
+    let date = null, time = null;
+    const E = '(?:까지|에|날)?(?=\\s)';
+    const take = (src, fn) => {
+      if (date) return;
+      const m = new RegExp(src).exec(text); if (!m) return;
+      const d = fn(m); if (d) { date = d; text = text.replace(m[0], ' '); }
+    };
+    take('\\s(오늘|내일|모레|글피)' + E, m => add({ 오늘: 0, 내일: 1, 모레: 2, 글피: 3 }[m[1]]));
+    take('\\s(\\d{1,3})\\s?일\\s?(?:후|뒤)' + E, m => add(+m[1]));
+    take('\\s[Dd]-(\\d{1,3})' + E, m => add(+m[1]));
+    take('\\s(이번\\s?주\\s?|다음\\s?주\\s?)?([월화수목금토일])요일' + E, m => {
+      const wd = '일월화수목금토'.indexOf(m[2]);
+      if (m[1] && m[1].startsWith('다음')) { // 다음 주 월요일부터 세기
+        const toMon = ((8 - t0.getDay()) % 7) || 7; return add(toMon + (wd + 6) % 7);
+      }
+      return add((wd - t0.getDay() + 7) % 7);
+    });
+    take('\\s(\\d{1,2})\\s?월\\s?(\\d{1,2})\\s?일' + E, m => md(+m[1], +m[2]));
+    take('\\s(\\d{1,2})[/.](\\d{1,2})' + E, m => md(+m[1], +m[2]));
+    // 「N일」만 있을 땐 「까지·에」가 붙었거나 맨 끝일 때만 (「1일 1커밋」 같은 건 그냥 둠)
+    take('\\s(\\d{1,2})\\s?일(?:(?:까지|에)(?=\\s)|(?=\\s*$))', m => {
+      const d = +m[1]; if (d < 1 || d > 31) return null;
+      let x = new Date(t0.getFullYear(), t0.getMonth(), d);
+      if (x < t0) x = new Date(t0.getFullYear(), t0.getMonth() + 1, d);
+      return x.getDate() === d ? x : null;
+    });
+    const tm = /\s(오전|오후|아침|낮|저녁|밤)?\s?(\d{1,2})\s?시(?:\s?(\d{1,2})\s?분|\s?(반))?(?:까지|에)?(?=\s)/.exec(text);
+    if (tm) {
+      let h = +tm[2]; const mi = tm[4] ? 30 : (+tm[3] || 0);
+      if (/오후|저녁|밤/.test(tm[1] || '') && h < 12) h += 12;
+      else if (!tm[1] && h >= 1 && h <= 6) h += 12; // 「3시」는 보통 오후
+      if (h <= 23 && mi <= 59) {
+        time = `${pad(h)}:${pad(mi)}`; text = text.replace(tm[0], ' ');
+        if (!date) { date = new Date(t0); const now = ref ? new Date(ref) : new Date(); if (h * 60 + mi <= now.getHours() * 60 + now.getMinutes()) date = add(1); }
+      }
+    }
+    const clean = text.replace(/\s+/g, ' ').trim();
+    if (!date) return { text: String(input || '').trim(), due: null };
+    return { text: clean || String(input || '').trim(), due: ymd(date) + (time ? 'T' + time : '') };
+  }
+
+  /* 오늘 끝낸 일 */
+  function doneToday(state, ref) {
+    const key = todayKey(ref), boards = {}; (state.boards || []).forEach(b => boards[b.id] = b);
+    const out = [];
+    (state.notes || []).forEach(n => (n.blocks || []).forEach(b => {
+      if (b.type !== 'check' || !b.done || !b.doneAt || !boards[n.boardId]) return;
+      if (todayKey(b.doneAt) !== key) return;
+      out.push({ id: b.id, noteId: n.id, text: (b.text || '').trim(), boardName: boards[n.boardId].name, doneAt: b.doneAt });
+    }));
+    return out.sort((a, b) => (a.doneAt < b.doneAt ? 1 : -1));
+  }
+
   /* ---------- 저장 연결 ---------- */
   const LS_KEY = 'postit.data';
   const Store = {
@@ -267,7 +329,7 @@
 
   return {
     uid, now, clamp, clone, DEFAULT_KINDS, LEVELS, IMP, DEFAULT_KEYWORDS, DEFAULT_PALETTE, DEFAULT_LINES,
-    defaultCharacter, normalizeChar, defaultData, normalize, parseDue, hasTime, dayDiff, dueLabel, remindTime, todayKey,
+    parseQuick, doneToday, defaultCharacter, normalizeChar, defaultData, normalize, parseDue, hasTime, dayDiff, dueLabel, remindTime, todayKey,
     kindOf, weightOf, scoreOf, collect, findBlock, addQuickItem, setDone, countDone, fillLine, Store,
   };
 });

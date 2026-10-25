@@ -89,6 +89,30 @@ body{display:flex;flex-direction:column;overflow:hidden;background:var(--panel);
 .pop .seg button{flex:1}
 .pop hr{border:0;border-top:var(--hair) solid var(--line);margin:12px -12px}
 
+/* 찾아간 포스트잇 잠깐 표시 */
+.note.found{box-shadow:0 1px 1px rgb(0 0 0 / .12),0 6px 12px rgb(0 0 0 / .14),0 0 0 3px var(--a9)}
+.b-check.found .b-in{background:rgb(255 197 61 / .35);border-radius:3px}
+
+/* 확대·축소 */
+.zoom{position:fixed;left:16px;bottom:20px;z-index:99999;display:flex;align-items:center;gap:2px;padding:4px;
+  background:var(--bg);border-radius:var(--r-m);box-shadow:var(--shadow-pop)}
+.zoom button{height:28px;min-width:28px;padding:0 6px;border:0;border-radius:var(--r-s);background:none;cursor:pointer;color:var(--text)}
+.zoom button:hover{background:var(--hover)}
+.zoom #zv{min-width:52px;font-size:var(--fs-s);color:var(--muted)}
+
+/* 판 옮기기 목록 */
+#mpop{padding:4px;min-width:160px}
+#mpop button{display:block;width:100%;height:32px;padding:0 10px;border:0;border-radius:var(--r-s);background:none;text-align:left;cursor:pointer;color:var(--text)}
+#mpop button:hover{background:var(--hover)}
+
+/* 되돌리기 알림 */
+.toast{position:fixed;left:50%;bottom:20px;z-index:100001;display:flex;align-items:center;gap:8px;height:40px;padding:0 6px 0 14px;
+  border-radius:var(--r-m);background:var(--s12);color:var(--s1);translate:-50% 8px;opacity:0;pointer-events:none;
+  transition:opacity var(--dur) var(--ease),translate var(--dur) var(--ease)}
+.toast.show{opacity:1;translate:-50% 0;pointer-events:auto}
+.toast button{height:30px;padding:0 10px;border:0;border-radius:var(--r-s);background:none;color:var(--a9);font-weight:600;cursor:pointer}
+.toast button:hover{background:rgb(255 255 255 / .08)}
+
 @media (pointer:coarse){
   .chip.empty{opacity:.5}
   .sw,.tb{height:36px}.sw{width:36px}
@@ -113,7 +137,10 @@ body{display:flex;flex-direction:column;overflow:hidden;background:var(--panel);
 </div>
 <div class="viewport" id="vp"><div class="board" id="board"></div></div>
 <div class="empty" id="empty">포스트잇이 없어요</div>
-<button class="btn primary fab" id="fab">+ 포스트잇</button>
+<button class="btn primary fab" id="fab" title="새 포스트잇 (Ctrl+N)">+ 포스트잇</button>
+<div class="zoom" id="zoom"><button id="zOut" aria-label="축소">−</button><button id="zv" title="100%로">100%</button><button id="zIn" aria-label="확대">+</button></div>
+<div class="toast" id="toast"><span id="toastText"></span><button id="undo">되돌리기</button></div>
+<div class="pop" id="mpop"></div>
 
 <!-- 마감·알림·중요도 -->
 <div class="pop" id="pop">
@@ -352,7 +379,7 @@ function tb(label, fn, cls){
   const b = h('button', 'tb' + (cls ? ' ' + cls : ''));
   b.textContent = label;
   b.onpointerdown = e => e.preventDefault();
-  b.onclick = fn;
+  b.onclick = e => fn(e);
   return b;
 }
 function noteEl(n){
@@ -379,10 +406,8 @@ function noteEl(n){
   });
   tools.append(decoBtn);
   tools.append(tb('기울기', () => { const i = TILTS.indexOf(n.tilt); n.tilt = TILTS[(i + 1) % TILTS.length]; touch(n); el.style.setProperty('--t', n.tilt + 'deg'); }));
-  tools.append(tb('삭제', () => {
-    if(!confirm('이 포스트잇을 삭제할까요?')) return;
-    state.notes = state.notes.filter(x => x !== n); selId = null; flushSoon(); renderBoard(); renderTabs();
-  }, 'danger'));
+  tools.append(tb('옮기기', e => openMovePop(n, e.currentTarget)));
+  tools.append(tb('삭제', () => deleteNote(n), 'danger'));
   el.append(tools);
 
   const head = h('div','head'); el.append(head);
@@ -417,7 +442,7 @@ function dragify(handle, n, el, mode){
     try{ handle.setPointerCapture(e.pointerId); }catch(_){}
     el.classList.add('dragging');
     const mv = ev => {
-      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      const dx = (ev.clientX - sx) / zoom, dy = (ev.clientY - sy) / zoom;
       if(mode === 'move'){ p.x = clamp(o.x + dx, 0, BW - 80); p.y = clamp(o.y + dy, 0, BH - 60); }
       else { p.w = clamp(o.w + dx, 160, 720); p.h = clamp(o.h + dy, 110, 1000); }
       place(el, n);
@@ -539,8 +564,8 @@ function removeBlock(n, b, focusPrev){
 /* ---------- 새 포스트잇 ---------- */
 function addNote(){
   const vp = $('#vp'), w = 240, hgt = 200;
-  const x = clamp(vp.scrollLeft + vp.clientWidth / 2 - w / 2 + (Math.random() * 80 - 40), 0, BW - w);
-  const y = clamp(vp.scrollTop + Math.max(80, vp.clientHeight / 2 - hgt / 2) + (Math.random() * 60 - 30), 0, BH - hgt);
+  const x = clamp((vp.scrollLeft + vp.clientWidth / 2) / zoom - w / 2 + (Math.random() * 80 - 40), 0, BW - w);
+  const y = clamp((vp.scrollTop + vp.clientHeight / 2) / zoom - hgt / 2 + (Math.random() * 60 - 30), 60, BH - hgt);
   const first = {id:uid(), type:'check', text:'', done:false};
   const n = {
     id:uid(), boardId:state.current, title:'', blocks:[first],
@@ -555,7 +580,83 @@ function addNote(){
 }
 $('#fab').onclick = addNote;
 $('#board').addEventListener('pointerdown', e => { if(e.target.id === 'board') deselect(); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape'){ closePop(); closeBoardPop(); deselect(); document.activeElement?.blur(); } });
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ closePop(); closeBoardPop(); closeMovePop(); deselect(); document.activeElement?.blur(); }
+  if((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')){ e.preventDefault(); addNote(); }
+  if((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')){ e.preventDefault(); setZoom(zoom + .1); }
+  if((e.ctrlKey || e.metaKey) && e.key === '-'){ e.preventDefault(); setZoom(zoom - .1); }
+  if((e.ctrlKey || e.metaKey) && e.key === '0'){ e.preventDefault(); setZoom(1); }
+});
+
+/* ---------- 삭제 되돌리기 ---------- */
+let toastT, undoFn = null;
+function toast(text, fn){
+  undoFn = fn; $('#toastText').textContent = text; $('#toast').classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => { $('#toast').classList.remove('show'); undoFn = null; }, 6000);
+}
+$('#undo').onclick = () => { if(undoFn){ undoFn(); undoFn = null; } $('#toast').classList.remove('show'); };
+function deleteNote(n){
+  const i = state.notes.indexOf(n); if(i < 0) return;
+  state.notes.splice(i, 1); selId = null; flushSoon(); renderBoard(); renderTabs();
+  toast('포스트잇을 삭제했어요', () => { state.notes.splice(i, 0, n); flushSoon(); renderBoard(); renderTabs(); });
+}
+
+/* ---------- 다른 판으로 옮기기 ---------- */
+let moveFor = null;
+function openMovePop(n, anchor){
+  moveFor = n;
+  const pop = $('#mpop'); pop.innerHTML = '';
+  [...state.boards].sort((a,b) => a.order - b.order).filter(b => b.id !== n.boardId).forEach(b => {
+    const x = h('button'); x.textContent = b.name;
+    x.onclick = () => {
+      const from = n.boardId; n.boardId = b.id; n.inbox = false; n.z = ++maxZ;
+      closeMovePop(); selId = null; flushSoon(n); renderBoard(); renderTabs();
+      toast(`「${b.name}」으로 옮겼어요`, () => { n.boardId = from; flushSoon(n); renderBoard(); renderTabs(); });
+    };
+    pop.append(x);
+  });
+  if(!pop.children.length){ const x = h('button'); x.textContent = '다른 판이 없어요'; x.disabled = true; pop.append(x); }
+  pop.classList.add('show');
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = clamp(r.left, 8, innerWidth - pop.offsetWidth - 8) + 'px';
+  pop.style.top = (r.bottom + 6 + pop.offsetHeight > innerHeight ? r.top - pop.offsetHeight - 6 : r.bottom + 6) + 'px';
+}
+function closeMovePop(){ $('#mpop').classList.remove('show'); moveFor = null; }
+document.addEventListener('pointerdown', e => { if(moveFor && !e.target.closest('#mpop')) closeMovePop(); }, true);
+
+/* ---------- 확대·축소 (Ctrl+휠) ---------- */
+let zoom = 1;
+try{ zoom = clamp(+getLS('postit.zoom.' + device) || 1, .4, 1.5); }catch(_){}
+function setZoom(z, cx, cy){
+  const vp = $('#vp'); z = Math.round(clamp(z, .4, 1.5) * 10) / 10;
+  if(z === zoom) return;
+  const r = vp.getBoundingClientRect();
+  const ax = cx == null ? vp.clientWidth / 2 : cx - r.left, ay = cy == null ? vp.clientHeight / 2 : cy - r.top;
+  const bx = (vp.scrollLeft + ax) / zoom, by = (vp.scrollTop + ay) / zoom; // 기준점은 그대로 두고 확대
+  zoom = z; applyZoom();
+  vp.scrollLeft = bx * zoom - ax; vp.scrollTop = by * zoom - ay;
+  setLS('postit.zoom.' + device, String(zoom));
+}
+function applyZoom(){ $('#board').style.zoom = zoom; $('#zv').textContent = Math.round(zoom * 100) + '%'; }
+$('#vp').addEventListener('wheel', e => { if(!e.ctrlKey) return; e.preventDefault(); setZoom(zoom + (e.deltaY < 0 ? .1 : -.1), e.clientX, e.clientY); }, { passive:false });
+$('#zIn').onclick = () => setZoom(zoom + .1);
+$('#zOut').onclick = () => setZoom(zoom - .1);
+$('#zv').onclick = () => setZoom(1);
+
+/* ---------- 목록·알림에서 찾아오기 ---------- */
+function focusItem({ noteId, blockId }){
+  const n = state.notes.find(x => x.id === noteId); if(!n) return;
+  closePop(); closeBoardPop(); closeMovePop();
+  if(state.current !== n.boardId){ state.current = n.boardId; save(); render(); }
+  const el = noteNode(n); if(!el) return;
+  const p = pos(n), vp = $('#vp');
+  vp.scrollTo({ left: Math.max(0, (p.x + p.w / 2) * zoom - vp.clientWidth / 2), top: Math.max(0, (p.y + p.h / 2) * zoom - vp.clientHeight / 2) });
+  select(n, el);
+  el.classList.add('found');
+  const row = blockId && el.querySelector(`[data-bid="${blockId}"]`);
+  if(row) row.classList.add('found');
+  setTimeout(() => { el.classList.remove('found'); row && row.classList.remove('found'); }, 1600);
+}
 
 function render(){ renderTabs(); renderBoard(); }
 (async () => {
@@ -564,7 +665,9 @@ function render(){ renderTabs(); renderBoard(); }
   applySettings();
   maxZ = state.notes.reduce((m,n) => Math.max(m, n.z || 0), 0);
   render();
+  applyZoom();
   Store.onChange(applyRemote);
+  if(window.api) api.onBoardFocus(focusItem);
 })();
 </script>
 </body>

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   hideList: () => ipcRenderer.send('list:hide'),
   onListShow: (cb) => on('list:show', cb),
   onSettingsGo: (cb) => on('settings:go', cb),
+  onBoardFocus: (cb) => on('board:focus', cb),
 
   charMouse: (inside) => ipcRenderer.send('char:mouse', inside),
   dragStart: () => ipcRenderer.send('char:dragStart'),
@@ -31,6 +32,6 @@ contextBridge.exposeInMainWorld('api', {
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   onUpdate: (cb) => on('update:status', cb),
-  openFolder: () => ipcRenderer.send('open:folder'),
+  openFolder: (which) => ipcRenderer.send('open:folder', which),
   quit: () => ipcRenderer.send('app:quit'),
 });
