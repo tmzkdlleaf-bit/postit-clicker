@@ -1,0 +1,66 @@
+{
+  "name": "postit-clicker",
+  "version": "0.3.0",
+  "description": "포스트잇 클리커 — 바탕화면 캐릭터 + 할 일 포스트잇",
+  "main": "main.js",
+  "author": "nabi",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64 --publish never",
+    "release": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.4",
+    "font-list": "^1.5.1",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.nabi.postit-clicker",
+    "productName": "Postit Clicker",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**",
+      "node_modules/font-list/**"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "포스트잇 클리커"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tmzkdlleaf-bit",
+        "repo": "postit-clicker",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tmzkdlleaf-bit/postit-clicker.git"
+  }
+}

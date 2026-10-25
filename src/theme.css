@@ -1,0 +1,80 @@
+/* 공통 색·글자·선 — Radix Colors (sand, amber, tomato, brown) */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Gamja+Flower&family=Hi+Melody&family=Gowun+Dodum&display=swap');
+
+:root{
+  color-scheme: light dark;
+  --s1:#fdfdfc; --s2:#f9f9f8; --s3:#f1f0ef; --s4:#e9e8e6; --s5:#e2e1de; --s6:#dad9d6;
+  --s7:#cfceca; --s8:#bcbbb5; --s9:#8d8d86; --s10:#82827c; --s11:#63635e; --s12:#21201c;
+  --a3:#fff7c2; --a4:#ffee9c; --a5:#fbe577; --a6:#f3d673; --a7:#e9c162; --a8:#e2a336;
+  --a9:#ffc53d; --a10:#ffba18; --a11:#ab6400; --a12:#4f3422;
+  --t3:#feebe7; --t4:#ffdcd3; --t9:#e54d2e; --t10:#dd4425; --t11:#d13415;
+  --b4:#f0e4d9; --b5:#ebdaca; --b6:#e4cdb7; --b7:#dcbc9f; --b8:#cea37e; --b9:#ad7f58;
+
+  /* 쓰임새 */
+  --bg: var(--s1);  --panel: var(--s2); --hover: var(--s4); --press: var(--s5);
+  --line: var(--s7); --line-soft: var(--s6);
+  --text: var(--s12); --muted: var(--s11); --faint: var(--s9);
+  --accent: var(--a9); --accent-text: var(--a12); --accent-soft: var(--a3); --accent-line: var(--a7);
+  --danger: var(--t11); --danger-soft: var(--t3); --danger-solid: var(--t9);
+  --cork: var(--b7); --cork-dot: var(--b8); --cork-dot2: var(--b6);
+  --paper-ink: #21201c; /* 포스트잇 위 글씨는 밝기와 상관없이 진하게 */
+
+  /* 글자 크기는 네 가지만 */
+  --fs-s: 12px; --fs-m: 14px; --fs-l: 16px; --fs-xl: 20px;
+  --ui: 'Pretendard', 'Malgun Gothic', system-ui, sans-serif;
+
+  /* 모서리 (바깥 = 안쪽 + 여백) */
+  --r-s: 6px; --r-m: 10px; --r-l: 14px;
+  --hair: .5px;
+  --ease: cubic-bezier(0, 0, .2, 1); --dur: 250ms;
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / .14), 0 0 0 var(--hair) rgb(0 0 0 / .12);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --s1:#111110; --s2:#191918; --s3:#222221; --s4:#2a2a28; --s5:#31312e; --s6:#3b3a37;
+    --s7:#494844; --s8:#62605b; --s9:#6f6d66; --s10:#7c7b74; --s11:#b5b3ad; --s12:#eeeeec;
+    --a3:#302008; --a4:#3f2700; --a5:#4d3000; --a6:#5c3d05; --a7:#714f19; --a8:#8f6424;
+    --a9:#ffc53d; --a10:#ffd60a; --a11:#ffca16; --a12:#ffe7b3;
+    --t3:#391714; --t4:#4e1511; --t9:#e54d2e; --t10:#ec6142; --t11:#ff977d;
+    --b4:#322922; --b5:#3e3128; --b6:#4d3c2f; --b7:#614a39; --b8:#7c5f46; --b9:#ad7f58;
+    --accent-text: #21201c;
+    --cork: var(--b5); --cork-dot: var(--b6); --cork-dot2: var(--b4);
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / .5), 0 0 0 var(--hair) rgb(255 255 255 / .12);
+  }
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--ui);font-size:var(--fs-m);color:var(--text);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+
+/* 기본 버튼 */
+.btn{height:30px;padding:0 12px;border:var(--hair) solid var(--line);border-radius:var(--r-s);background:var(--bg);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn:active{background:var(--press)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.btn.primary:hover{background:var(--a10)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.btn.danger{color:var(--danger)}
+.btn.icon{width:30px;padding:0;justify-content:center}
+.field{height:30px;padding:0 8px;border:var(--hair) solid var(--line);border-radius:var(--r-s);background:var(--bg);outline:none;min-width:0}
+.field:focus{border-color:var(--a8);box-shadow:0 0 0 2px var(--a5)}
+textarea.field{height:auto;padding:8px;line-height:1.5;resize:vertical}
+input[type=checkbox]{accent-color:var(--a9)}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--s5);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--a9);box-shadow:0 0 0 var(--hair) var(--a11)}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px var(--a5)}
+input[type=color]{width:30px;height:30px;padding:0;border:var(--hair) solid var(--line);border-radius:var(--r-s);background:none;cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:3px}
+input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
+
+/* 여러 개 중 하나 고르기 */
+.seg{display:inline-flex;padding:2px;gap:2px;background:var(--s3);border-radius:var(--r-s)}
+.seg button{height:26px;padding:0 10px;border:0;border-radius:4px;background:none;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--bg);color:var(--text);font-weight:600;box-shadow:0 0 0 var(--hair) var(--line)}
+
+/* 떠 있는 작은 창 */
+.pop{position:fixed;z-index:100000;background:var(--bg);border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:4px;display:none}
+.pop.show{display:block}

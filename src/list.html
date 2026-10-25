@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>할 일</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+html,body{height:100%;background:transparent;overflow:hidden}
+body{padding:10px}
+.card{height:100%;display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-l);box-shadow:var(--shadow-pop);overflow:hidden}
+
+.top{display:flex;align-items:center;gap:4px;padding:10px 10px 6px 16px;-webkit-app-region:drag}
+.top h1{margin:0;font-size:var(--fs-l);font-weight:700;flex:1}
+.top h1 span{color:var(--faint);font-weight:500;margin-left:6px}
+.top .btn{-webkit-app-region:no-drag}
+
+.add{padding:4px 12px 10px}
+.add .field{width:100%;height:34px;padding:0 10px}
+.more{display:none;gap:6px;margin-top:6px}
+.add.open .more{display:flex}
+.more select{flex:1}
+.more input[type=date]{width:130px}
+
+.list{flex:1;overflow-y:auto;border-top:var(--hair) solid var(--line-soft)}
+.item{display:flex;gap:10px;align-items:flex-start;padding:10px 16px;border-bottom:var(--hair) solid var(--line-soft)}
+.item input{width:16px;height:16px;margin:2px 0 0;flex:none;cursor:pointer}
+.item .txt{flex:1;min-width:0}
+.item .t{line-height:1.4;word-break:break-all;cursor:default}
+.item.gone{opacity:0;transition:opacity var(--dur) var(--ease)}
+.meta{display:flex;gap:10px;margin-top:2px;font-size:var(--fs-s);color:var(--muted)}
+.meta .over{color:var(--danger);font-weight:600}
+.meta .soon{color:var(--a11);font-weight:600}
+.item.hi .t{font-weight:600}
+.empty{padding:48px 16px;text-align:center;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="top">
+    <h1>할 일<span id="cnt"></span></h1>
+    <button class="btn ghost" id="openBoard">판 열기</button>
+    <button class="btn ghost icon" id="close" aria-label="닫기">✕</button>
+  </div>
+  <div class="add" id="add">
+    <input class="field" type="text" id="newText" placeholder="할 일 추가" autocomplete="off">
+    <div class="more">
+      <select class="field" id="newBoard" aria-label="판"></select>
+      <input class="field" type="date" id="newDue" aria-label="마감">
+      <button class="btn primary" id="addBtn">추가</button>
+    </div>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+<script src="shared.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let data = null;
+
+function render() {
+  const items = Shared.collect(data.state, data.settings);
+  $('#cnt').textContent = items.length || '';
+  const sel = $('#newBoard'), keep = sel.value;
+  sel.innerHTML = '';
+  [...data.state.boards].sort((a, b) => a.order - b.order).forEach(b => {
+    const o = document.createElement('option'); o.value = b.id; o.textContent = b.name; sel.append(o);
+  });
+  sel.value = data.state.boards.some(b => b.id === keep) ? keep : data.state.current;
+
+  const list = $('#list'); list.innerHTML = '';
+  if (!items.length) { list.innerHTML = '<div class="empty">할 일이 없어요</div>'; return; }
+  items.forEach(it => {
+    const row = document.createElement('div'); row.className = 'item' + (it.weight >= 3.5 ? ' hi' : '');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('aria-label', '완료');
+    cb.onchange = () => {
+      row.classList.add('gone');
+      Shared.setDone(data.state, it.id, true);
+      Shared.Store.save({ state: data.state });
+      setTimeout(render, 250);
+    };
+    const txt = document.createElement('div'); txt.className = 'txt';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = it.text;
+    const meta = document.createElement('div'); meta.className = 'meta';
+    if (it.due) {
+      const d = document.createElement('span'); d.textContent = Shared.dueLabel(it.due);
+      if (it.days < 0) d.className = 'over'; else if (it.days <= 1) d.className = 'soon';
+      meta.append(d);
+    }
+    const bn = document.createElement('span'); bn.textContent = it.boardName; meta.append(bn);
+    txt.append(t, meta);
+    row.append(cb, txt);
+    list.append(row);
+  });
+}
+
+function addItem() {
+  const text = $('#newText').value.trim(); if (!text) return;
+  Shared.addQuickItem(data.state, $('#newBoard').value, text, $('#newDue').value || null, data.settings.notePalette);
+  Shared.Store.save({ state: data.state });
+  $('#newText').value = ''; $('#newDue').value = '';
+  render(); $('#newText').focus();
+}
+const add = $('#add');
+$('#newText').addEventListener('input', () => add.classList.toggle('open', !!$('#newText').value));
+$('#newText').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addItem(); } });
+$('#addBtn').onclick = addItem;
+$('#close').onclick = () => window.api && api.hideList();
+$('#openBoard').onclick = () => window.api && api.open('board');
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && window.api) api.hideList(); });
+
+(async () => {
+  data = await Shared.Store.load();
+  render();
+  Shared.Store.onChange(d => { data = d; render(); });
+  if (window.api) api.onListShow(d => { data = Shared.normalize(d); render(); $('#newText').focus(); });
+})();
+</script>
+</body>
+</html>

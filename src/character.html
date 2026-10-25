@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+html,body{height:100%;background:transparent;overflow:hidden;user-select:none;-webkit-user-select:none}
+#stage{position:absolute;left:50%;bottom:0;width:var(--S,160px);height:var(--S,160px);transform:translateX(-50%)}
+#stage.hop{animation:hop 250ms var(--ease)}
+@keyframes hop{0%{translate:0 0}40%{translate:0 -10px}100%{translate:0 0}}
+#stage img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;-webkit-user-drag:none}
+#stage.flip img{scale:-1 1}
+
+/* 말풍선 */
+#bubble{
+  --bb: var(--s1); --bf: var(--s12); --bl: var(--s12);
+  position:absolute;left:50%;bottom:calc(var(--S,160px) * .9);translate:-50% 4px;opacity:0;
+  max-width:calc(100% - 20px);width:max-content;
+  background:var(--bb);color:var(--bf);border:1.5px solid var(--bl);border-radius:var(--r-l);padding:6px 12px;
+  font-size:var(--bfs,16px);line-height:1.35;text-align:center;word-break:keep-all;pointer-events:none;
+  transition:opacity var(--dur) var(--ease),translate var(--dur) var(--ease);
+}
+#bubble::after{content:'';position:absolute;left:50%;bottom:-7px;width:10px;height:10px;background:inherit;
+  border-right:inherit;border-bottom:inherit;border-color:var(--bl);translate:-50% 0;rotate:45deg}
+#bubble.show{opacity:1;translate:-50% 0}
+#bubble.square{border-radius:4px}
+#bubble.hand{border-radius:255px 18px 225px 18px / 18px 225px 18px 255px;border-width:2px}
+#bubble.plain{border-color:transparent}
+#bubble.plain::after{display:none}
+#bubble.urgent{--bl: var(--t9)}
+</style>
+</head>
+<body>
+<div id="bubble"></div>
+<div id="stage">
+  <img id="body" alt="">
+  <img id="head" alt="">
+  <img id="gif" alt="" hidden>
+</div>
+<script src="shared.js"></script>
+<script>
+const ID = new URLSearchParams(location.search).get('id');
+
+/* ---------- 기본 캐릭터 (포스트잇 꼬마) ---------- */
+const INK = '#4f3422', PAPER = '#ffee9c', FOLD = '#fbe577', BLUSH = '#ffdcd3';
+const svg = s => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">${s}</svg>`);
+const HEAD = `
+  <g transform="rotate(-4 200 160)">
+    <rect x="92" y="62" width="216" height="196" rx="34" fill="${PAPER}" stroke="${INK}" stroke-width="10"/>
+    <path d="M262 258 L308 212 L308 226 Q308 258 276 258 Z" fill="${FOLD}" stroke="${INK}" stroke-width="8" stroke-linejoin="round"/>
+    <rect x="160" y="44" width="80" height="34" rx="4" fill="#ffffffb8" transform="rotate(3 200 60)"/>
+    <ellipse cx="138" cy="196" rx="20" ry="12" fill="${BLUSH}"/>
+    <ellipse cx="262" cy="196" rx="20" ry="12" fill="${BLUSH}"/>
+    <path d="M186 206 Q200 218 214 206" fill="none" stroke="${INK}" stroke-width="8" stroke-linecap="round"/>
+    EYES
+  </g>`;
+const DEFAULT = {
+  head1: svg(HEAD.replace('EYES', `<circle cx="158" cy="170" r="13" fill="${INK}"/><circle cx="242" cy="170" r="13" fill="${INK}"/>`)),
+  head2: svg(HEAD.replace('EYES', `<path d="M146 158 L172 170 L146 182 M254 158 L228 170 L254 182" fill="none" stroke="${INK}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`)),
+  body: svg(`
+    <ellipse cx="200" cy="384" rx="80" ry="10" fill="#0000001f"/>
+    <rect x="150" y="236" width="100" height="120" rx="30" fill="${PAPER}" stroke="${INK}" stroke-width="10"/>
+    <path d="M150 300 L250 300" stroke="${FOLD}" stroke-width="8"/>
+    <ellipse cx="136" cy="292" rx="20" ry="16" fill="${PAPER}" stroke="${INK}" stroke-width="9"/>
+    <ellipse cx="264" cy="292" rx="20" ry="16" fill="${PAPER}" stroke="${INK}" stroke-width="9"/>
+    <ellipse cx="172" cy="362" rx="24" ry="14" fill="${PAPER}" stroke="${INK}" stroke-width="9"/>
+    <ellipse cx="228" cy="362" rx="24" ry="14" fill="${PAPER}" stroke="${INK}" stroke-width="9"/>`),
+};
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), headEl = $('#head'), bodyEl = $('#body'), gifEl = $('#gif'), bubble = $('#bubble');
+let data = null, C = null;
+let src = {};
+const lastIdx = {};
+
+/* ---------- 설정 적용 ---------- */
+function apply(d) {
+  data = d;
+  C = d.settings.characters.find(c => c.id === ID) || d.settings.characters[0];
+  const root = document.documentElement.style;
+  root.setProperty('--S', C.size + 'px');
+  stage.classList.toggle('flip', !!C.flip);
+  const p = C.parts, g = C.gifs, b = C.bubble;
+  src = {
+    head1: p.head1 || DEFAULT.head1, head2: p.head2 || p.head1 || DEFAULT.head2,
+    body: p.body || (p.head1 ? '' : DEFAULT.body),
+    idle: g.idle, typing: g.typing || g.idle, done: g.done || g.idle,
+  };
+  const gifMode = C.mode === 'gif' && !!g.idle;
+  gifEl.hidden = !gifMode; headEl.hidden = gifMode; bodyEl.hidden = gifMode || !src.body;
+  if (gifMode) setGif('idle', true);
+  else { headEl.src = src.head1; if (src.body) bodyEl.src = src.body; }
+  // 말풍선
+  bubble.className = bubble.className.replace(/\b(round|square|hand|plain)\b/g, '').trim();
+  bubble.classList.add(b.shape || 'round');
+  bubble.style.setProperty('--bb', b.bg || 'var(--s1)');
+  bubble.style.setProperty('--bf', b.fg || 'var(--s12)');
+  bubble.style.setProperty('--bl', b.fg || 'var(--s12)');
+  bubble.style.fontFamily = b.font ? `"${b.font}", var(--ui)` : '';
+  root.setProperty('--bfs', (b.size || 16) + 'px');
+  hitCache.clear();
+  resetIdle();
+}
+
+/* ---------- 그림 있는 곳만 잡기 (투명한 곳은 클릭이 뒤로) ---------- */
+const hitCache = new Map();
+function alphaMap(img) {
+  const key = img.src + '|' + C.size;
+  if (hitCache.has(key)) return hitCache.get(key);
+  if (!img.complete) return null;
+  const c = document.createElement('canvas'); c.width = c.height = C.size;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  try { x.drawImage(img, 0, 0, C.size, C.size); const a = x.getImageData(0, 0, C.size, C.size).data; hitCache.set(key, a); return a; }
+  catch (e) { hitCache.set(key, 'box'); return 'box'; }
+}
+function hitAt(px, py) {
+  if (!C) return false;
+  const S = C.size, r = stage.getBoundingClientRect();
+  let x = px - r.left; const y = py - r.top;
+  if (x < 0 || y < 0 || x >= S || y >= S) return false;
+  if (C.flip) x = S - 1 - x;
+  const layers = gifEl.hidden ? [headEl, bodyEl].filter(i => !i.hidden) : [gifEl];
+  for (const img of layers) {
+    const off = img === headEl ? (+headEl.dataset.dy || 0) : 0;
+    const a = alphaMap(img); if (!a || a === 'box') return true;
+    const yy = Math.round(y - off); if (yy < 0 || yy >= S) continue;
+    if (a[(yy * S + Math.round(x)) * 4 + 3] > 24) return true;
+  }
+  return false;
+}
+let inside = false, dragging = false;
+function setInside(v) { if (v === inside) return; inside = v; window.api && api.charMouse(v); }
+document.addEventListener('mousemove', e => { if (!dragging) setInside(hitAt(e.clientX, e.clientY)); });
+document.addEventListener('mouseleave', () => { if (!dragging) setInside(false); });
+
+/* ---------- 움직임 ---------- */
+function setHead(which, dy) {
+  headEl.src = which === 2 ? src.head2 : src.head1;
+  headEl.dataset.dy = dy;
+  headEl.style.transform = dy ? `translateY(${dy}px)` : '';
+}
+const depthPx = (k = 1) => (C.depth || 0) * (C.size / 160) * k;
+let pressT;
+function tap(k, ms) { if (!gifEl.hidden) return; setHead(2, depthPx(k)); clearTimeout(pressT); pressT = setTimeout(() => setHead(1, 0), ms); }
+let gifState = '';
+function setGif(state, force) {
+  const s = src[state] || src.idle; if (!s) return;
+  if (!force && gifState === state) return;
+  gifState = state; gifEl.src = s;
+}
+function hop() { stage.classList.remove('hop'); void stage.offsetWidth; stage.classList.add('hop'); }
+
+/* ---------- 소리 ---------- */
+let ac = null, audio = null;
+function sound(urgent) {
+  const s = C.sound; if (!s || s.mode === 'off') return;
+  const vol = Shared.clamp(+s.volume || 0.5, 0, 1);
+  if (s.mode === 'file' && s.file) {
+    try { if (!audio || audio.dataset.src !== s.file) { audio = new Audio(s.file); audio.dataset.src = s.file; }
+      audio.volume = vol; audio.currentTime = 0; audio.play().catch(() => {}); } catch (e) {}
+    return;
+  }
+  try {
+    ac = ac || new AudioContext();
+    const t = ac.currentTime;
+    const blip = (at, f1, f2, peak) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f1, at); o.frequency.exponentialRampToValueAtTime(f2, at + .07);
+      g.gain.setValueAtTime(.0001, at); g.gain.exponentialRampToValueAtTime(peak * vol, at + .005); g.gain.exponentialRampToValueAtTime(.0001, at + .09);
+      o.connect(g).connect(ac.destination); o.start(at); o.stop(at + .1);
+    };
+    blip(t, urgent ? 1200 : 900, urgent ? 700 : 480, .36);
+    if (urgent) blip(t + .12, 1500, 1100, .28);
+  } catch (e) {}
+}
+
+/* ---------- 말 ---------- */
+let sayT;
+function say(text, urgent, ms) {
+  if (!text) return;
+  bubble.textContent = text;
+  bubble.classList.toggle('urgent', !!urgent);
+  bubble.classList.add('show');
+  clearTimeout(sayT);
+  sayT = setTimeout(() => bubble.classList.remove('show'), ms || Math.max(1600, 1000 + text.length * 70));
+}
+function pick(kind) {
+  const list = (C.lines[kind] || []).filter(l => l.trim());
+  if (!list.length) return '';
+  let i = Math.floor(Math.random() * list.length);
+  if (list.length > 1 && i === lastIdx[kind]) i = (i + 1) % list.length;
+  lastIdx[kind] = i; return list[i];
+}
+function items() { return Shared.collect(data.state, data.settings); }
+function urgentLine(it) {
+  return Shared.fillLine(pick('urgent') || '{할일}, {마감}', { 할일: it.text, 마감: Shared.dueLabel(it.due) || '곧', 판: it.boardName || '' });
+}
+function talk() {
+  if (C.urgentTalk) {
+    const urgent = items().filter(i => i.days !== null && i.days <= 1);
+    if (urgent.length && Math.random() < 0.6) { say(urgentLine(urgent[Math.floor(Math.random() * Math.min(3, urgent.length))]), true); return; }
+  }
+  say(pick('click'));
+}
+
+/* 한동안 안 누르면 혼잣말 */
+let idleT;
+function resetIdle() {
+  clearTimeout(idleT);
+  if (!C || !(C.idleMin > 0)) return;
+  idleT = setTimeout(() => { say(pick('idle')); hop(); resetIdle(); }, C.idleMin * 60000);
+}
+/* 하루 첫 실행 인사 */
+function morning() {
+  if (!C.morning) return;
+  const key = 'postit.morning.' + ID, today = Shared.todayKey();
+  let last = null; try { last = localStorage.getItem(key); } catch (_) {}
+  if (last === today) return;
+  try { localStorage.setItem(key, today); } catch (_) {}
+  const n = items().filter(i => i.days !== null && i.days <= 0).length;
+  const line = pick('morning'); if (!line) return;
+  setTimeout(() => { hop(); say(Shared.fillLine(line, { 개수: n }), false, 4000); }, 1200);
+}
+
+/* ---------- 누르기 / 끌기 / 우클릭 ---------- */
+let down = null, lastClick = 0;
+stage.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || !inside) return;
+  down = { x: e.screenX, y: e.screenY, moved: false, t: Date.now() };
+  dragging = true;
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  if (gifEl.hidden) { clearTimeout(pressT); setHead(2, depthPx()); }
+  window.api && api.dragStart();
+});
+stage.addEventListener('pointermove', e => {
+  if (!down) return;
+  if (!down.moved && Math.hypot(e.screenX - down.x, e.screenY - down.y) > 4) { down.moved = true; if (gifEl.hidden) setHead(1, 0); }
+  if (down.moved) window.api && api.dragMove();
+});
+function endDown(e) {
+  if (!down) return;
+  const moved = down.moved, held = Date.now() - down.t; down = null; dragging = false;
+  if (moved) { window.api && api.dragEnd(); }
+  else {
+    const t = Date.now();
+    sound();
+    if (gifEl.hidden) { clearTimeout(pressT); pressT = setTimeout(() => setHead(1, 0), Math.max(0, (C.hold || 110) - held)); }
+    else hop();
+    if (t - lastClick < 320) { window.api && api.open('board'); lastClick = 0; }
+    else { talk(); lastClick = t; }
+    resetIdle();
+  }
+  if (e) setInside(hitAt(e.clientX, e.clientY));
+}
+stage.addEventListener('pointerup', endDown);
+stage.addEventListener('pointercancel', endDown);
+document.addEventListener('contextmenu', e => { e.preventDefault(); if (inside) window.api && api.open('list'); });
+
+/* ---------- 본체에서 오는 신호 ---------- */
+let typingT;
+if (window.api) {
+  api.onKey(() => {
+    if (!gifEl.hidden) { setGif('typing'); clearTimeout(typingT); typingT = setTimeout(() => setGif('idle'), 700); }
+    else if (!down) tap(0.5, 70);
+  });
+  api.onSay(({ item, text }) => {
+    if (item) { sound(true); hop(); say(urgentLine(item), true, 7000); }
+    else if (text) { sound(); hop(); say(text, false, 6000); }
+  });
+  api.onDone(() => {
+    hop();
+    if (!gifEl.hidden && C.gifs.done) { setGif('done'); clearTimeout(typingT); typingT = setTimeout(() => setGif('idle'), 2500); }
+    say(pick('done'));
+  });
+  api.onChanged(d => apply(Shared.normalize(d)));
+}
+
+(async () => {
+  apply(window.api ? Shared.normalize(await api.get()) : Shared.defaultData());
+  morning();
+})();
+</script>
+</body>
+</html>

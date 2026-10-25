@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>설정</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+html,body{height:100%}
+body{display:flex;background:var(--bg);overflow:hidden}
+nav{width:168px;flex:none;background:var(--panel);border-right:var(--hair) solid var(--line);padding:16px 8px;display:flex;flex-direction:column;gap:2px}
+nav button{height:34px;padding:0 12px;border:0;border-radius:var(--r-s);background:none;text-align:left;cursor:pointer;color:var(--muted)}
+nav button:hover{background:var(--hover)}
+nav button.on{background:var(--bg);color:var(--text);font-weight:600;box-shadow:0 0 0 var(--hair) var(--line)}
+nav .grow{flex:1}
+main{flex:1;overflow-y:auto;padding:24px 32px 48px}
+section{display:none;max-width:620px}
+section.on{display:block}
+h2{font-size:var(--fs-xl);margin:0 0 20px}
+h3{font-size:var(--fs-m);font-weight:700;margin:28px 0 10px}
+.row{display:flex;align-items:center;gap:10px;min-height:38px}
+.row > .k{width:112px;flex:none;color:var(--muted)}
+.row input[type=range]{flex:1;max-width:280px}
+.row .v{width:56px;color:var(--muted);font-size:var(--fs-s);text-align:right}
+.row .field{flex:1;max-width:280px}
+.chk{display:flex;align-items:center;gap:8px;min-height:32px;cursor:pointer}
+.chk input{width:16px;height:16px}
+.divider{border-top:var(--hair) solid var(--line);margin:24px 0}
+
+/* 캐릭터 고르기 */
+.chars{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.chars .pill{height:30px;padding:0 12px;border:var(--hair) solid var(--line);border-radius:15px;background:var(--bg);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chars .pill.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.chars .pill.off{color:var(--faint)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* 그림 칸 */
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.slot{display:flex;flex-direction:column;gap:6px}
+.slot .pv{aspect-ratio:1;border-radius:var(--r-m);border:var(--hair) solid var(--line);
+  background:repeating-conic-gradient(var(--s3) 0 25%,var(--s1) 0 50%) 0 0/16px 16px;display:grid;place-items:center;overflow:hidden}
+.slot .pv img{max-width:100%;max-height:100%}
+.slot .pv span{color:var(--faint);font-size:var(--fs-s)}
+.slot .name{font-weight:600}
+.slot .btns{display:flex;gap:4px}
+.slot .btns .btn{flex:1;justify-content:center;padding:0 6px}
+
+/* 말풍선 미리보기 */
+.preview{display:flex;justify-content:center;padding:24px;border-radius:var(--r-m);background:var(--panel);margin-top:8px}
+.bub{max-width:280px;padding:6px 12px;border:1.5px solid;border-radius:var(--r-l);text-align:center;word-break:keep-all;line-height:1.35}
+.bub.square{border-radius:4px}
+.bub.hand{border-radius:255px 18px 225px 18px / 18px 225px 18px 255px;border-width:2px}
+.bub.plain{border-color:transparent!important}
+
+/* 대사 */
+.lines{display:grid;gap:14px}
+.lines label{display:block;font-weight:600;margin-bottom:6px}
+.lines textarea{width:100%;min-height:76px}
+
+/* 색 목록 */
+.palette{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pal{position:relative}
+.pal input[type=color]{width:44px;height:44px}
+.pal .x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:0;background:var(--s12);color:var(--s1);font-size:var(--fs-s);line-height:18px;padding:0;cursor:pointer;display:none}
+.pal:hover .x{display:block}
+.fontpv{margin-top:10px;padding:16px;border-radius:var(--r-m);background:var(--a4);color:var(--paper-ink);font-size:var(--fs-xl)}
+
+/* 판 종류 */
+.kinds{display:grid;gap:6px}
+.kind{display:flex;gap:6px;align-items:center}
+.kind .field:first-child{flex:1}
+.kind select{width:120px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.two textarea{width:100%;min-height:110px}
+.two label{display:block;font-weight:600;margin-bottom:6px}
+
+.hk{width:200px;text-align:center;cursor:pointer}
+.hk.wait{border-color:var(--a8);box-shadow:0 0 0 2px var(--a5)}
+.note{font-size:var(--fs-s);color:var(--danger);margin-left:8px}
+</style>
+</head>
+<body>
+<nav>
+  <button data-s="char" class="on">캐릭터</button>
+  <button data-s="note">포스트잇</button>
+  <button data-s="prio">우선도</button>
+  <button data-s="general">일반</button>
+  <div class="grow"></div>
+  <button id="quit">종료</button>
+</nav>
+<main>
+  <!-- 캐릭터 -->
+  <section id="s-char" class="on">
+    <h2>캐릭터</h2>
+    <div class="chars" id="chars"></div>
+    <div class="row"><span class="k">이름</span><input class="field" id="cName"></div>
+    <div class="row"><span class="k"></span>
+      <div class="actions">
+        <button class="btn" id="cToggle"></button>
+        <button class="btn" id="cExport">내보내기</button>
+        <button class="btn ghost danger" id="cDelete">삭제</button>
+      </div>
+    </div>
+
+    <h3>그림</h3>
+    <div class="row"><span class="k">방식</span><div class="seg" id="cMode"><button data-v="parts">그림 조각</button><button data-v="gif">GIF</button></div></div>
+    <div class="slots" id="slots"></div>
+
+    <h3>움직임</h3>
+    <div class="row"><span class="k">크기</span><input type="range" id="size" min="90" max="320" step="10"><span class="v" id="sizeV"></span></div>
+    <div class="row"><span class="k">눌림 깊이</span><input type="range" id="depth" min="0" max="20"><span class="v" id="depthV"></span></div>
+    <div class="row"><span class="k">눌림 시간</span><input type="range" id="hold" min="40" max="400" step="10"><span class="v" id="holdV"></span></div>
+    <div class="row"><span class="k"></span><label class="chk"><input type="checkbox" id="flip">좌우 뒤집기</label></div>
+    <div class="row"><span class="k"></span><label class="chk"><input type="checkbox" id="typeReact">키보드 입력에 반응</label></div>
+
+    <h3>소리</h3>
+    <div class="row"><span class="k">누를 때</span><div class="seg" id="sMode"><button data-v="click">기본</button><button data-v="file">내 소리</button><button data-v="off">끔</button></div></div>
+    <div class="row" id="sFileRow"><span class="k">파일</span><button class="btn" id="sPick">고르기</button><span id="sName" style="color:var(--muted)"></span><button class="btn ghost" id="sTest">들어보기</button></div>
+    <div class="row"><span class="k">음량</span><input type="range" id="sVol" min="0" max="1" step="0.05"><span class="v" id="sVolV"></span></div>
+
+    <h3>말풍선</h3>
+    <div class="row"><span class="k">모양</span><div class="seg" id="bShape"><button data-v="round">둥글게</button><button data-v="square">각지게</button><button data-v="hand">손그림</button><button data-v="plain">테두리 없음</button></div></div>
+    <div class="row"><span class="k">바탕색</span><input type="color" id="bBg"><button class="btn ghost" id="bBgAuto">자동</button></div>
+    <div class="row"><span class="k">글자색</span><input type="color" id="bFg"><button class="btn ghost" id="bFgAuto">자동</button></div>
+    <div class="row"><span class="k">글꼴</span><select class="field" id="bFont"></select></div>
+    <div class="row"><span class="k">글자 크기</span><input type="range" id="bSize" min="12" max="28"><span class="v" id="bSizeV"></span></div>
+    <div class="preview"><div class="bub" id="bPreview">오늘 할 일 봤어?</div></div>
+
+    <h3>대사</h3>
+    <div class="row"><span class="k"></span><label class="chk"><input type="checkbox" id="urgentTalk">마감이 오늘이나 내일인 일을 먼저 말하기</label></div>
+    <div class="row"><span class="k">혼잣말 간격</span>
+      <select class="field" id="idleMin"><option value="0">끔</option><option value="5">5분</option><option value="15">15분</option><option value="30">30분</option><option value="60">1시간</option></select></div>
+    <div class="row"><span class="k"></span><label class="chk"><input type="checkbox" id="morningOn">하루 첫 실행 때 인사</label></div>
+    <div class="lines" style="margin-top:10px">
+      <div><label>누를 때</label><textarea class="field" data-l="click"></textarea></div>
+      <div><label>마감 임박</label><textarea class="field" data-l="urgent" placeholder="{할일}, {마감}이야."></textarea></div>
+      <div><label>할 일 끝냈을 때</label><textarea class="field" data-l="done"></textarea></div>
+      <div><label>혼잣말</label><textarea class="field" data-l="idle"></textarea></div>
+      <div><label>아침 인사</label><textarea class="field" data-l="morning" placeholder="오늘 할 일 {개수}개야."></textarea></div>
+    </div>
+  </section>
+
+  <!-- 포스트잇 -->
+  <section id="s-note">
+    <h2>포스트잇</h2>
+    <h3>색</h3>
+    <div class="palette" id="palette"></div>
+    <h3>글꼴</h3>
+    <div class="row"><span class="k">포스트잇 글꼴</span><select class="field" id="noteFont"></select></div>
+    <div class="fontpv" id="fontPv">장보기 우유, 달걀</div>
+  </section>
+
+  <!-- 우선도 -->
+  <section id="s-prio">
+    <h2>우선도</h2>
+    <h3>판 종류</h3>
+    <div class="kinds" id="kinds"></div>
+    <div style="margin-top:8px"><button class="btn" id="kindAdd">+ 종류 추가</button></div>
+    <h3>날짜</h3>
+    <div class="row"><span class="k">날짜 우선</span>
+      <select class="field" id="urgentDays"></select></div>
+    <h3>단어</h3>
+    <div class="two">
+      <div><label>중요도 올리기</label><textarea class="field" id="kwHigh"></textarea></div>
+      <div><label>중요도 내리기</label><textarea class="field" id="kwLow"></textarea></div>
+    </div>
+  </section>
+
+  <!-- 일반 -->
+  <section id="s-general">
+    <h2>일반</h2>
+    <div class="row"><span class="k">화면</span><div class="seg" id="theme"><button data-v="system">시스템</button><button data-v="light">밝게</button><button data-v="dark">어둡게</button></div></div>
+    <div class="row"><span class="k">목록 단축키</span><input class="field hk" id="hotkey" readonly><button class="btn ghost" id="hkClear">지우기</button><span class="note" id="hkErr"></span></div>
+    <div class="row"><span class="k">자동 실행</span><label class="chk"><input type="checkbox" id="autoLaunch">컴퓨터 켤 때 실행</label></div>
+    <div class="row"><span class="k">버전</span><span id="ver"></span><button class="btn" id="updBtn">업데이트 확인</button><span id="updMsg" style="color:var(--muted)"></span></div>
+    <div class="row"><span class="k">파일</span><button class="btn" id="folder">그림과 소리 폴더 열기</button></div>
+  </section>
+</main>
+<script src="shared.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+let data = null, S = null, C = null, curId = null;
+const WEB_FONTS = ['Gaegu', 'Nanum Pen Script', 'Gamja Flower', 'Hi Melody', 'Gowun Dodum', 'Pretendard'];
+let systemFonts = [];
+
+/* ---------- 저장 ---------- */
+let saveT = null;
+function commit(now) {
+  clearTimeout(saveT);
+  const go = () => { saveT = null; Shared.Store.save({ settings: S }); };
+  if (now) go(); else saveT = setTimeout(go, 250);
+}
+
+/* ---------- 왼쪽 메뉴 ---------- */
+function go(sec) {
+  $$('nav button[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === sec));
+  $$('section').forEach(s => s.classList.toggle('on', s.id === 's-' + sec));
+}
+$$('nav button[data-s]').forEach(b => b.onclick = () => go(b.dataset.s));
+
+/* ---------- 공통 묶기 ---------- */
+function seg(id, get, set) {
+  const el = $('#' + id);
+  const sync = () => el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === get()));
+  el.querySelectorAll('button').forEach(b => b.onclick = () => { set(b.dataset.v); sync(); commit(); });
+  sync();
+}
+function range(id, obj, key, unit, fmt) {
+  const el = $('#' + id), v = $('#' + id + 'V');
+  const show = () => v.textContent = (fmt ? fmt(obj[key]) : obj[key]) + unit;
+  el.value = obj[key]; show();
+  el.oninput = () => { obj[key] = +el.value; show(); commit(); };
+}
+function check(id, obj, key) { const el = $('#' + id); el.checked = !!obj[key]; el.onchange = () => { obj[key] = el.checked; commit(); }; }
+function fontOptions(sel, value, withAuto) {
+  sel.innerHTML = '';
+  const add = (v, t, parent) => { const o = document.createElement('option'); o.value = v; o.textContent = t; if (v) o.style.fontFamily = `"${v}"`; (parent || sel).append(o); };
+  if (withAuto) add('', '기본');
+  const g1 = document.createElement('optgroup'); g1.label = '기본 제공'; WEB_FONTS.forEach(f => add(f, f, g1)); sel.append(g1);
+  if (systemFonts.length) { const g2 = document.createElement('optgroup'); g2.label = '내 컴퓨터'; systemFonts.forEach(f => add(f, f, g2)); sel.append(g2); }
+  if (value && ![...sel.options].some(o => o.value === value)) add(value, value);
+  sel.value = value || '';
+}
+
+/* ---------- 캐릭터 ---------- */
+const SLOTS = { parts: [['head1', '머리'], ['head2', '눌린 머리'], ['body', '몸']], gif: [['idle', '평소'], ['typing', '타이핑'], ['done', '완료']] };
+
+function renderChars() {
+  const box = $('#chars'); box.innerHTML = '';
+  S.characters.forEach(c => {
+    const p = document.createElement('button');
+    p.className = 'pill' + (c.id === curId ? ' on' : '') + (c.visible === false ? ' off' : '');
+    p.textContent = c.name || '이름 없음';
+    p.onclick = () => { curId = c.id; renderChar(); };
+    box.append(p);
+  });
+  const add = document.createElement('button'); add.className = 'btn ghost'; add.textContent = '+ 추가';
+  add.onclick = () => { const c = Shared.defaultCharacter('캐릭터 ' + (S.characters.length + 1)); S.characters.push(c); curId = c.id; commit(true); renderChar(); };
+  const imp = document.createElement('button'); imp.className = 'btn ghost'; imp.textContent = '가져오기';
+  imp.onclick = async () => {
+    if (!window.api) return;
+    const r = await api.importChar(); if (!r) return;
+    if (r.error) { alert(r.error); return; }
+    data = Shared.normalize(await api.get()); S = data.settings; curId = r.id; renderChar();
+  };
+  box.append(add, imp);
+}
+
+function renderChar() {
+  C = S.characters.find(c => c.id === curId) || S.characters[0]; curId = C.id;
+  renderChars();
+  $('#cName').value = C.name;
+  $('#cName').oninput = () => { C.name = $('#cName').value.trim() || '이름 없음'; commit(); renderChars(); };
+  $('#cToggle').textContent = C.visible === false ? '보이기' : '숨기기';
+  $('#cToggle').onclick = () => { C.visible = C.visible === false; commit(true); renderChar(); };
+  $('#cExport').onclick = () => window.api && api.exportChar(C.id);
+  $('#cDelete').disabled = S.characters.length < 2;
+  $('#cDelete').onclick = () => {
+    if (S.characters.length < 2 || !confirm(`「${C.name}」을 삭제할까요?`)) return;
+    S.characters = S.characters.filter(c => c !== C); curId = S.characters[0].id; commit(true); renderChar();
+  };
+  // 그림
+  seg('cMode', () => C.mode === 'gif' ? 'gif' : 'parts', v => { C.mode = v; renderSlots(); });
+  renderSlots();
+  // 움직임
+  range('size', C, 'size', 'px'); range('depth', C, 'depth', 'px'); range('hold', C, 'hold', 'ms');
+  check('flip', C, 'flip'); check('typeReact', C, 'typeReact');
+  // 소리
+  seg('sMode', () => C.sound.mode, v => { C.sound.mode = v; syncSound(); });
+  syncSound();
+  range('sVol', C.sound, 'volume', '%', v => Math.round(v * 100));
+  $('#sPick').onclick = async () => { if (!window.api) return; const u = await api.pickFile('sound'); if (u) { C.sound.file = u; C.sound.mode = 'file'; commit(); renderChar(); } };
+  $('#sTest').onclick = () => { if (C.sound.file) { const a = new Audio(C.sound.file); a.volume = C.sound.volume; a.play().catch(() => {}); } };
+  // 말풍선
+  const B = C.bubble;
+  seg('bShape', () => B.shape, v => { B.shape = v; syncBubble(); });
+  $('#bBg').value = B.bg || '#fdfdfc'; $('#bFg').value = B.fg || '#21201c';
+  $('#bBg').oninput = () => { B.bg = $('#bBg').value; syncBubble(); commit(); };
+  $('#bFg').oninput = () => { B.fg = $('#bFg').value; syncBubble(); commit(); };
+  $('#bBgAuto').onclick = () => { B.bg = ''; syncBubble(); commit(); };
+  $('#bFgAuto').onclick = () => { B.fg = ''; syncBubble(); commit(); };
+  fontOptions($('#bFont'), B.font, true);
+  $('#bFont').onchange = () => { B.font = $('#bFont').value; syncBubble(); commit(); };
+  range('bSize', B, 'size', 'px');
+  $('#bSize').addEventListener('input', syncBubble);
+  syncBubble();
+  // 대사
+  check('urgentTalk', C, 'urgentTalk'); check('morningOn', C, 'morning');
+  $('#idleMin').value = String(C.idleMin || 0);
+  $('#idleMin').onchange = () => { C.idleMin = +$('#idleMin').value; commit(); };
+  $$('textarea[data-l]').forEach(t => {
+    t.value = (C.lines[t.dataset.l] || []).join('\n');
+    t.oninput = () => { C.lines[t.dataset.l] = t.value.split('\n').map(x => x.trim()).filter(Boolean); commit(); };
+  });
+}
+function renderSlots() {
+  const mode = C.mode === 'gif' ? 'gif' : 'parts', store = mode === 'gif' ? C.gifs : C.parts;
+  const box = $('#slots'); box.innerHTML = '';
+  SLOTS[mode].forEach(([key, label]) => {
+    const s = document.createElement('div'); s.className = 'slot';
+    const pv = document.createElement('div'); pv.className = 'pv';
+    if (store[key]) { const im = document.createElement('img'); im.src = store[key]; pv.append(im); }
+    else { const sp = document.createElement('span'); sp.textContent = mode === 'parts' ? '기본' : '없음'; pv.append(sp); }
+    const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = label;
+    const btns = document.createElement('div'); btns.className = 'btns';
+    const pick = document.createElement('button'); pick.className = 'btn'; pick.textContent = '고르기';
+    pick.onclick = async () => { if (!window.api) return; const u = await api.pickFile(mode === 'gif' ? 'gif' : 'image'); if (u) { store[key] = u; renderSlots(); commit(); } };
+    const clr = document.createElement('button'); clr.className = 'btn ghost'; clr.textContent = '비우기'; clr.disabled = !store[key];
+    clr.onclick = () => { store[key] = ''; renderSlots(); commit(); };
+    btns.append(pick, clr);
+    s.append(pv, nm, btns); box.append(s);
+  });
+}
+function syncSound() {
+  $('#sFileRow').style.display = C.sound.mode === 'file' ? 'flex' : 'none';
+  $('#sName').textContent = C.sound.file ? decodeURIComponent(C.sound.file.split('/').pop()) : '';
+  $('#sTest').hidden = !C.sound.file;
+}
+function syncBubble() {
+  const B = C.bubble, el = $('#bPreview');
+  el.className = 'bub ' + (B.shape || 'round');
+  el.style.background = B.bg || 'var(--s1)';
+  el.style.color = B.fg || 'var(--s12)';
+  el.style.borderColor = B.fg || 'var(--s12)';
+  el.style.fontFamily = B.font ? `"${B.font}", var(--ui)` : '';
+  el.style.fontSize = (B.size || 16) + 'px';
+}
+
+/* ---------- 포스트잇 ---------- */
+function renderPalette() {
+  const box = $('#palette'); box.innerHTML = '';
+  S.notePalette.forEach((c, i) => {
+    const w = document.createElement('div'); w.className = 'pal';
+    const inp = document.createElement('input'); inp.type = 'color'; inp.value = c;
+    inp.oninput = () => { S.notePalette[i] = inp.value; commit(); };
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.setAttribute('aria-label', '색 빼기');
+    x.onclick = () => { if (S.notePalette.length < 2) return; S.notePalette.splice(i, 1); commit(); renderPalette(); };
+    w.append(inp, x); box.append(w);
+  });
+  const add = document.createElement('button'); add.className = 'btn'; add.textContent = '+';
+  add.style.cssText = 'width:44px;height:44px;justify-content:center';
+  add.onclick = () => { S.notePalette.push('#fff7c2'); commit(); renderPalette(); };
+  box.append(add);
+}
+function renderNoteFont() {
+  fontOptions($('#noteFont'), S.noteFont, false);
+  $('#fontPv').style.fontFamily = `"${S.noteFont}"`;
+  $('#noteFont').onchange = () => { S.noteFont = $('#noteFont').value; $('#fontPv').style.fontFamily = `"${S.noteFont}"`; commit(); };
+}
+
+/* ---------- 우선도 ---------- */
+function renderKinds() {
+  const box = $('#kinds'); box.innerHTML = '';
+  S.kinds.forEach((k, i) => {
+    const r = document.createElement('div'); r.className = 'kind';
+    const name = document.createElement('input'); name.className = 'field'; name.value = k.label;
+    name.oninput = () => { k.label = name.value.trim() || k.label; commit(); };
+    const lv = document.createElement('select'); lv.className = 'field';
+    Shared.LEVELS.forEach(l => { const o = document.createElement('option'); o.value = l.w; o.textContent = l.label; lv.append(o); });
+    lv.value = String(Math.round(k.w));
+    lv.onchange = () => { k.w = +lv.value; commit(); };
+    const del = document.createElement('button'); del.className = 'btn ghost icon'; del.textContent = '✕'; del.setAttribute('aria-label', '종류 삭제');
+    del.disabled = S.kinds.length < 2;
+    del.onclick = () => {
+      const used = data.state.boards.filter(b => b.kind === k.id).map(b => b.name);
+      if (used.length && !confirm(`「${used.join('」, 「')}」 판은 다른 종류로 바뀌어요. 삭제할까요?`)) return;
+      S.kinds.splice(i, 1); commit(true); renderKinds();
+    };
+    r.append(name, lv, del); box.append(r);
+  });
+}
+$('#kindAdd').onclick = () => { S.kinds.push({ id: Shared.uid(), label: '새 종류', w: 2 }); commit(); renderKinds(); $('#kinds .kind:last-child .field').select(); };
+const splitWords = s => s.split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+
+/* ---------- 단축키 ---------- */
+let hkWait = false;
+function showHotkey() { $('#hotkey').value = hkWait ? '키를 누르세요' : (S.hotkey || '없음'); $('#hotkey').classList.toggle('wait', hkWait); }
+$('#hotkey').onclick = () => { hkWait = true; $('#hkErr').textContent = ''; showHotkey(); };
+$('#hotkey').onblur = () => { hkWait = false; showHotkey(); };
+$('#hotkey').onkeydown = async e => {
+  if (!hkWait) return;
+  e.preventDefault();
+  if (e.key === 'Escape') { hkWait = false; showHotkey(); return; }
+  const mods = []; if (e.ctrlKey) mods.push('Ctrl'); if (e.altKey) mods.push('Alt'); if (e.shiftKey) mods.push('Shift'); if (e.metaKey) mods.push('Super');
+  let k = e.code;
+  if (/^Key[A-Z]$/.test(k)) k = k.slice(3); else if (/^Digit\d$/.test(k)) k = k.slice(5); else if (/^F\d+$/.test(k)) {}
+  else if (k === 'Space') k = 'Space'; else if (/^(Control|Alt|Shift|Meta)/.test(k)) return; else k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  if (!mods.length && !/^F\d+$/.test(k)) { $('#hkErr').textContent = 'Ctrl, Alt, Shift 중 하나와 함께 눌러주세요.'; return; }
+  const accel = [...mods, k].join('+');
+  hkWait = false;
+  const ok = window.api ? await api.setHotkey(accel) : true;
+  if (ok) { S.hotkey = accel; commit(true); $('#hkErr').textContent = ''; }
+  else $('#hkErr').textContent = '다른 프로그램이 이미 쓰는 키예요.';
+  showHotkey();
+};
+$('#hkClear').onclick = async () => { S.hotkey = ''; if (window.api) await api.setHotkey(''); commit(true); showHotkey(); };
+
+/* ---------- 그리기 ---------- */
+function render() {
+  renderChar();
+  renderPalette(); renderNoteFont();
+  renderKinds();
+  const ud = $('#urgentDays'); ud.innerHTML = '';
+  [0, 1, 2, 3, 5, 7, 14].forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n === 0 ? '당일부터' : `마감 ${n}일 전부터`; ud.append(o); });
+  ud.value = String(S.urgentDays); ud.onchange = () => { S.urgentDays = +ud.value; commit(); };
+  $('#kwHigh').value = S.keywords.high.join(', '); $('#kwLow').value = S.keywords.low.join(', ');
+  $('#kwHigh').oninput = () => { S.keywords.high = splitWords($('#kwHigh').value); commit(); };
+  $('#kwLow').oninput = () => { S.keywords.low = splitWords($('#kwLow').value); commit(); };
+  seg('theme', () => S.theme, v => { S.theme = v; });
+  showHotkey();
+  check('autoLaunch', S, 'autoLaunch');
+}
+/* ---------- 업데이트 ---------- */
+const UPD_MSG = { checking: '확인하는 중', none: '최신 버전이에요', available: v => `${v} 받을 수 있어요`, downloading: (v, p) => `받는 중 ${p}%`,
+  ready: v => `${v} 설치 준비 끝`, error: '확인하지 못했어요', dev: '설치한 프로그램에서만 확인돼요', idle: '' };
+function showUpd(u) {
+  $('#ver').textContent = u.current || '';
+  const m = UPD_MSG[u.state]; $('#updMsg').textContent = typeof m === 'function' ? m(u.version, u.percent) : (m || '');
+  $('#updBtn').textContent = u.state === 'ready' ? '재시작해서 설치' : '업데이트 확인';
+}
+$('#updBtn').onclick = async () => { if (window.api) showUpd(await api.checkUpdate()); };
+
+$('#folder').onclick = () => window.api && api.openFolder();
+$('#quit').onclick = () => { if (confirm('프로그램을 종료할까요?')) window.api && api.quit(); };
+
+(async () => {
+  data = await Shared.Store.load(); S = data.settings; curId = S.characters[0].id;
+  render();
+  if (location.hash) go(location.hash.slice(1));
+  // 트레이 메뉴 등 다른 곳에서 바뀌면 다시 그리기 (글 쓰는 중이면 끝난 뒤에)
+  let pending = null;
+  const typing = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox' && a.type !== 'range'; };
+  const applyRemote = d => {
+    if (typing()) { pending = d; return; }
+    pending = null;
+    if (saveT) { commit(true); return; } // 아직 안 보낸 내 변경이 있으면 내 쪽을 남김
+    data = d; S = d.settings; render();
+  };
+  Shared.Store.onChange(applyRemote);
+  document.addEventListener('focusout', () => setTimeout(() => { if (pending && !typing()) applyRemote(pending); }, 50));
+  if (window.api) {
+    api.updateStatus().then(showUpd); api.onUpdate(showUpd);
+    api.onSettingsGo(go);
+    api.fonts().then(f => { systemFonts = f.filter(x => !WEB_FONTS.includes(x)); renderNoteFont(); fontOptions($('#bFont'), C.bubble.font, true); });
+  }
+})();
+</script>
+</body>
+</html>
